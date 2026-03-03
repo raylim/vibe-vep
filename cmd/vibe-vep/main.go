@@ -16,7 +16,10 @@ import (
 	"github.com/inodb/vibe-vep/internal/annotate"
 	"github.com/inodb/vibe-vep/internal/cache"
 	"github.com/inodb/vibe-vep/internal/datasource/alphamissense"
+	"github.com/inodb/vibe-vep/internal/datasource/clinvar"
+	"github.com/inodb/vibe-vep/internal/datasource/hotspots"
 	"github.com/inodb/vibe-vep/internal/datasource/oncokb"
+	"github.com/inodb/vibe-vep/internal/datasource/signal"
 	"github.com/inodb/vibe-vep/internal/duckdb"
 	"github.com/inodb/vibe-vep/internal/maf"
 	"github.com/inodb/vibe-vep/internal/output"
@@ -517,6 +520,37 @@ func buildSources(logger *zap.Logger, cacheDir, assembly string) []annotate.Anno
 		}
 	}
 
+	// ClinVar
+	if viper.GetBool("annotations.clinvar") {
+		cvStore, err := loadClinVar(logger, cacheDir)
+		if err != nil {
+			logger.Warn("could not load ClinVar data", zap.Error(err))
+		} else {
+			sources = append(sources, clinvar.NewSource(cvStore))
+		}
+	}
+
+	// Cancer Hotspots
+	if hotspotsPath := viper.GetString("annotations.hotspots"); hotspotsPath != "" {
+		store, err := hotspots.Load(hotspotsPath)
+		if err != nil {
+			logger.Warn("could not load hotspots data", zap.String("path", hotspotsPath), zap.Error(err))
+		} else {
+			logger.Info("loaded cancer hotspots", zap.Int("genes", store.GeneCount()), zap.Int("hotspots", store.HotspotCount()))
+			sources = append(sources, hotspots.NewSource(store))
+		}
+	}
+
+	// SIGNAL
+	if viper.GetBool("annotations.signal") {
+		sigStore, err := loadSignal(logger, cacheDir)
+		if err != nil {
+			logger.Warn("could not load SIGNAL data", zap.Error(err))
+		} else {
+			sources = append(sources, signal.NewSource(sigStore))
+		}
+	}
+
 	return sources
 }
 
@@ -583,6 +617,90 @@ func loadAlphaMissense(logger *zap.Logger, cacheDir, assembly string) (*alphamis
 	}
 
 	return amStore, nil
+}
+
+// loadClinVar loads ClinVar data, using gob cache if available.
+func loadClinVar(logger *zap.Logger, cacheDir string) (*clinvar.Store, error) {
+	vcfPath := filepath.Join(cacheDir, ClinVarFileName)
+	gobPath := filepath.Join(cacheDir, "clinvar.gob")
+
+	// Try gob cache first
+	if clinvar.GobValid(gobPath, vcfPath) {
+		logger.Info("loading ClinVar from cache...")
+		start := time.Now()
+		store, err := clinvar.LoadGob(gobPath)
+		if err == nil {
+			logger.Info("loaded ClinVar from cache",
+				zap.Int("variants", store.Count()),
+				zap.Duration("elapsed", time.Since(start)))
+			return store, nil
+		}
+		logger.Warn("could not load ClinVar cache, re-parsing VCF", zap.Error(err))
+	}
+
+	// Parse VCF
+	if _, err := os.Stat(vcfPath); err != nil {
+		return nil, fmt.Errorf("ClinVar VCF not found at %s\nHint: run 'vibe-vep download' to fetch it", vcfPath)
+	}
+
+	logger.Info("parsing ClinVar VCF (first load may take a minute)...", zap.String("path", vcfPath))
+	start := time.Now()
+	store, err := clinvar.Load(vcfPath)
+	if err != nil {
+		return nil, fmt.Errorf("load ClinVar data: %w", err)
+	}
+	logger.Info("loaded ClinVar data",
+		zap.Int("variants", store.Count()),
+		zap.Duration("elapsed", time.Since(start)))
+
+	// Save gob cache for fast reload
+	if err := store.SaveGob(gobPath); err != nil {
+		logger.Warn("could not save ClinVar cache", zap.Error(err))
+	}
+
+	return store, nil
+}
+
+// loadSignal loads SIGNAL data, using gob cache if available.
+func loadSignal(logger *zap.Logger, cacheDir string) (*signal.Store, error) {
+	tsvPath := filepath.Join(cacheDir, SignalFileName)
+	gobPath := filepath.Join(cacheDir, "signal.gob")
+
+	// Try gob cache first
+	if signal.GobValid(gobPath, tsvPath) {
+		logger.Info("loading SIGNAL from cache...")
+		start := time.Now()
+		store, err := signal.LoadGob(gobPath)
+		if err == nil {
+			logger.Info("loaded SIGNAL from cache",
+				zap.Int("variants", store.Count()),
+				zap.Duration("elapsed", time.Since(start)))
+			return store, nil
+		}
+		logger.Warn("could not load SIGNAL cache, re-parsing TSV", zap.Error(err))
+	}
+
+	// Parse TSV
+	if _, err := os.Stat(tsvPath); err != nil {
+		return nil, fmt.Errorf("SIGNAL TSV not found at %s\nHint: run 'vibe-vep download' to fetch it", tsvPath)
+	}
+
+	logger.Info("parsing SIGNAL data...", zap.String("path", tsvPath))
+	start := time.Now()
+	store, err := signal.Load(tsvPath)
+	if err != nil {
+		return nil, fmt.Errorf("load SIGNAL data: %w", err)
+	}
+	logger.Info("loaded SIGNAL data",
+		zap.Int("variants", store.Count()),
+		zap.Duration("elapsed", time.Since(start)))
+
+	// Save gob cache for fast reload
+	if err := store.SaveGob(gobPath); err != nil {
+		logger.Warn("could not save SIGNAL cache", zap.Error(err))
+	}
+
+	return store, nil
 }
 
 func newPrepareCmd(verbose *bool) *cobra.Command {

@@ -134,6 +134,16 @@ func runDownload(logger *zap.Logger, assembly, outputDir string, gtfOnly bool) e
 		}
 	}
 
+	// Download ClinVar data if enabled in config
+	if viper.GetBool("annotations.clinvar") {
+		cvURL := getClinVarURL(assembly)
+		cvFile := filepath.Join(destDir, ClinVarFileName)
+		fmt.Printf("\nClinVar annotation enabled in config, downloading...\n")
+		if err := downloadFile(cvURL, cvFile); err != nil {
+			logger.Warn("could not download ClinVar data", zap.Error(err))
+		}
+	}
+
 	fmt.Printf("\nDownload complete!\n")
 	fmt.Printf("To annotate variants, run:\n")
 	fmt.Printf("  vibe-vep annotate input.vcf\n")
@@ -240,6 +250,22 @@ func formatSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// ClinVar and SIGNAL data file names.
+const (
+	ClinVarFileName = "clinvar.vcf.gz"
+	SignalFileName  = "signaldb_all_variants_frequencies.txt"
+)
+
+// getClinVarURL returns the download URL for ClinVar data.
+func getClinVarURL(assembly string) string {
+	switch strings.ToUpper(assembly) {
+	case "GRCH37":
+		return "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh37/clinvar.vcf.gz"
+	default:
+		return "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz"
+	}
 }
 
 // getAlphaMissenseURL returns the download URL for AlphaMissense data.
