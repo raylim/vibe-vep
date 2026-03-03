@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install download-testdata
+.PHONY: build test lint clean install download-testdata docs docs-build
 
 # Binary name
 BINARY=vibe-vep
@@ -40,3 +40,11 @@ download-testdata:
 deps:
 	go mod download
 	go mod tidy
+
+# Local docs preview (with drafts)
+docs:
+	cd docs && hugo server -D
+
+# Build docs for production
+docs-build:
+	cd docs && hugo --minify

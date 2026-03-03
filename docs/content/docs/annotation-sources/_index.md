@@ -1,0 +1,48 @@
+---
+title: Annotation Sources
+description: Data sources available for variant annotation.
+weight: 3
+---
+
+## Core
+
+- **GENCODE**: Gene annotations from [GENCODE](https://www.gencodegenes.org/) — transcripts, exons, CDS coordinates
+
+## Annotation Sources (opt-in)
+
+| Source | Match Level | Assembly | Data Size | Description |
+|--------|------------|----------|-----------|-------------|
+| **OncoKB** | Gene symbol | Any | ~50 KB | Cancer gene classification (ONCOGENE/TSG) from [OncoKB](https://www.oncokb.org/) |
+| **AlphaMissense** | Genomic (chr:pos:ref:alt) | GRCh38 | ~643 MB | Missense pathogenicity scores from [AlphaMissense](https://github.com/google-deepmind/alphamissense) (Cheng et al., Science 2023). CC BY 4.0 |
+| **ClinVar** | Genomic (chr:pos:ref:alt) | GRCh38 | ~182 MB | Clinical significance from [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) (4.1M variants) |
+| **Cancer Hotspots** | Protein position (transcript + AA pos) | Any | ~200 KB | Recurrent mutation hotspots from [cancerhotspots.org](https://www.cancerhotspots.org/) |
+| **SIGNAL** | Genomic (chr:pos:ref:alt) | GRCh37 only | ~32 MB | Germline mutation frequencies from [SIGNAL](https://signal.mutationalsignatures.com/) |
+
+## Match Levels
+
+**Match level** determines how each source links to variants:
+
+- **Genomic**: matches on exact chr:pos:ref:alt — assembly-specific (GRCh37 vs GRCh38)
+- **Protein position**: matches on transcript + amino acid position — transcript-version sensitive. Hotspot positions are only annotated when the annotation's transcript matches the hotspot's transcript.
+- **Gene symbol**: matches on gene name only — assembly-independent
+
+## Enabling Sources
+
+```bash
+# AlphaMissense (GRCh38): download + prepare + enable
+vibe-vep config set annotations.alphamissense true
+vibe-vep download  # fetches ~643 MB
+vibe-vep prepare   # loads into DuckDB
+
+# ClinVar (GRCh38): download + enable
+vibe-vep config set annotations.clinvar true
+vibe-vep download  # fetches ~182 MB clinvar.vcf.gz
+
+# Hotspots: point to TSV file
+vibe-vep config set annotations.hotspots /path/to/hotspots_v2_and_3d.txt
+
+# SIGNAL (GRCh37 only): enable
+vibe-vep config set annotations.signal true
+```
+
+Use `vibe-vep version` to see which sources are loaded and `vibe-vep version --maf-columns` for the full column mapping.

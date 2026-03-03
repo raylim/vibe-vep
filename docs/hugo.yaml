@@ -1,0 +1,65 @@
+baseURL: https://inodb.github.io/vibe-vep/
+languageCode: en-us
+title: vibe-vep
+
+module:
+  proxy: direct
+  hugoVersion:
+    extended: true
+    min: "0.157.0"
+  imports:
+    - path: github.com/google/docsy
+      disable: false
+
+params:
+  description: A lightweight variant effect predictor for cBioPortal, Genome Nexus, and OncoKB
+  github_repo: https://github.com/inodb/vibe-vep
+  github_project_repo: https://github.com/inodb/vibe-vep
+  github_branch: main
+
+  ui:
+    navbar_logo: false
+    sidebar_menu_compact: true
+    sidebar_menu_foldable: true
+    breadcrumb_disable: false
+
+  links:
+    user:
+      - name: GitHub
+        url: https://github.com/inodb/vibe-vep
+        icon: fab fa-github
+        desc: Source code
+      - name: cBioPortal
+        url: https://www.cbioportal.org/
+        desc: Cancer genomics portal
+
+menu:
+  main:
+    - name: Documentation
+      url: /docs/
+      weight: 10
+    - name: GitHub
+      url: https://github.com/inodb/vibe-vep
+      weight: 99
+      pre: <i class="fab fa-github"></i>
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    style: tango
+
+outputFormats:
+  PRINT:
+    baseName: index
+    isHTML: true
+    mediaType: text/html
+    path: printview
+    permalinkable: false
+
+outputs:
+  section:
+    - HTML
+    - RSS
+    - PRINT
