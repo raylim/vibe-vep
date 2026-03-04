@@ -1,0 +1,243 @@
+{{/* parquet-query.html — Hugo shortcode for querying Parquet annotations via DuckDB-WASM */}}
+
+<style>
+  .pq-container {
+    max-width: 900px;
+    margin: 1rem 0;
+  }
+  .pq-search {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .pq-search input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9rem;
+  }
+  .pq-search button {
+    padding: 0.5rem 1rem;
+    border: 1px solid #0066cc;
+    border-radius: 4px;
+    background: #0066cc;
+    color: white;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .pq-search button:hover { background: #0055aa; }
+  .pq-search button:disabled { background: #999; border-color: #999; cursor: wait; }
+  .pq-url {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    align-items: center;
+  }
+  .pq-url label { font-weight: bold; font-size: 0.85rem; }
+  .pq-url input[type="text"] {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+  .pq-url button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #666;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .pq-status {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .pq-status.loading { background: #fff3cd; color: #856404; }
+  .pq-status.ready { background: #d4edda; color: #155724; }
+  .pq-status.error { background: #f8d7da; color: #721c24; }
+  .pq-examples {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+  }
+  .pq-examples code {
+    background: #f5f5f5;
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .pq-examples code:hover { background: #e0e0e0; }
+  .pq-results {
+    overflow-x: auto;
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  .pq-results table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    font-family: monospace;
+  }
+  .pq-results th, .pq-results td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid #eee;
+    white-space: nowrap;
+    text-align: left;
+  }
+  .pq-results th {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .pq-results tr:hover { background: #f0f8ff; }
+  .pq-info { font-size: 0.85rem; color: #666; margin-top: 0.5rem; }
+</style>
+
+<div class="pq-container">
+  <div class="pq-url">
+    <label>Parquet URL:</label>
+    <input type="text" id="pq-url-input" placeholder="https://example.com/annotations.parquet" />
+    <button id="pq-connect-btn" onclick="pqConnect()">Connect</button>
+  </div>
+
+  <div id="pq-status" class="pq-status" style="display:none;"></div>
+
+  <div class="pq-examples">
+    Try: <code onclick="pqSetQuery('KRAS')">KRAS</code>
+    <code onclick="pqSetQuery('12:25245350:C:A')">12:25245350:C:A</code>
+    <code onclick="pqSetQuery('SELECT * FROM annotations LIMIT 10')">SQL query</code>
+  </div>
+
+  <div class="pq-search">
+    <input type="text" id="pq-query-input" placeholder="Gene name, variant (12:25245350:C:A), or SQL query" disabled />
+    <button id="pq-search-btn" onclick="pqSearch()" disabled>Search</button>
+  </div>
+
+  <div id="pq-results" class="pq-results" style="display:none;"></div>
+  <div id="pq-info" class="pq-info"></div>
+</div>
+
+<script type="module">
+  import { VibeVEPClient } from '{{ "js/parquet-query.js" | relURL }}';
+
+  let client = null;
+
+  function setStatus(msg, cls) {
+    const el = document.getElementById('pq-status');
+    el.textContent = msg;
+    el.className = 'pq-status ' + cls;
+    el.style.display = 'block';
+  }
+
+  window.pqSetQuery = function(q) {
+    document.getElementById('pq-query-input').value = q;
+    if (client) pqSearch();
+  };
+
+  window.pqConnect = async function() {
+    const url = document.getElementById('pq-url-input').value.trim();
+    if (!url) return;
+
+    const btn = document.getElementById('pq-connect-btn');
+    btn.disabled = true;
+    setStatus('Loading DuckDB-WASM and connecting...', 'loading');
+
+    try {
+      if (client) await client.close();
+      client = new VibeVEPClient(url);
+      await client.init();
+      setStatus('Connected. Ready to query.', 'ready');
+      document.getElementById('pq-query-input').disabled = false;
+      document.getElementById('pq-search-btn').disabled = false;
+    } catch (e) {
+      setStatus('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  window.pqSearch = async function() {
+    if (!client) return;
+
+    const input = document.getElementById('pq-query-input').value.trim();
+    if (!input) return;
+
+    const btn = document.getElementById('pq-search-btn');
+    btn.disabled = true;
+    const start = performance.now();
+
+    try {
+      let results;
+      const variantMatch = input.match(/^(\w+):(\d+):([A-Z]+):([A-Z]+)$/);
+
+      if (input.toUpperCase().startsWith('SELECT')) {
+        results = await client.query(input);
+      } else if (variantMatch) {
+        results = await client.lookupVariant(variantMatch[1], parseInt(variantMatch[2]), variantMatch[3], variantMatch[4]);
+      } else {
+        results = await client.lookupGene(input.toUpperCase());
+      }
+
+      const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+      renderResults(results);
+      document.getElementById('pq-info').textContent =
+        `${results.length} result(s) in ${elapsed}s`;
+    } catch (e) {
+      document.getElementById('pq-info').textContent = 'Error: ' + e.message;
+      document.getElementById('pq-results').style.display = 'none';
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  function renderResults(rows) {
+    const el = document.getElementById('pq-results');
+    if (!rows.length) {
+      el.innerHTML = '<p style="padding:1rem;color:#666;">No results found.</p>';
+      el.style.display = 'block';
+      return;
+    }
+
+    // Show key columns first
+    const priority = ['chrom', 'pos', 'ref', 'alt', 'gene_name', 'transcript_id',
+      'consequence', 'impact', 'hgvsc', 'hgvsp', 'amino_acid_change', 'is_canonical'];
+    const allKeys = Object.keys(rows[0]);
+    const keys = [...priority.filter(k => allKeys.includes(k)),
+                  ...allKeys.filter(k => !priority.includes(k) && k !== 'chrom_numeric')];
+
+    let html = '<table><thead><tr>';
+    keys.forEach(k => html += `<th>${k}</th>`);
+    html += '</tr></thead><tbody>';
+    rows.forEach(row => {
+      html += '<tr>';
+      keys.forEach(k => {
+        let val = row[k];
+        if (val === null || val === undefined) val = '';
+        html += `<td>${val}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.style.display = 'block';
+  }
+
+  // Enter key triggers search
+  document.getElementById('pq-query-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') pqSearch();
+  });
+  document.getElementById('pq-url-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') pqConnect();
+  });
+</script>

@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec
+.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export
 
 # Binary name
 BINARY=vibe-vep
@@ -40,6 +40,12 @@ download-testdata:
 deps:
 	go mod download
 	go mod tidy
+
+# Export annotations to Parquet (override INPUT and OUTPUT as needed)
+INPUT ?= testdata/tcga/chol_tcga_gdc_data_mutations.txt
+OUTPUT ?= annotations.parquet
+parquet-export: build
+	./$(BINARY) export parquet --canonical --pick -o $(OUTPUT) $(INPUT)
 
 # Build WASM binary for interactive tutorial
 wasm:
