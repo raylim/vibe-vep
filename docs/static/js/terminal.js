@@ -214,7 +214,8 @@
   }
 
   function writeln(text) {
-    term.write(text + "\r\n");
+    // xterm.js needs \r\n for proper line breaks; WASM output uses bare \n.
+    term.write(text.replace(/\n/g, "\r\n") + "\r\n");
   }
 
   function executeCommand(cmd) {
