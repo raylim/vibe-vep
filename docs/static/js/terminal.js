@@ -5,6 +5,7 @@
   // Virtual filesystem for example files.
   const virtualFS = {
     "example.vcf": null, // loaded from WASM
+    "example.maf": null, // loaded from WASM
   };
 
   // Command history.
@@ -78,8 +79,13 @@
     window.onVibeVEPReady = function () {
       wasmReady = true;
       // Load example VCF into virtual FS.
-      if (window.vibeVEP && window.vibeVEP.exampleVCF) {
-        virtualFS["example.vcf"] = window.vibeVEP.exampleVCF();
+      if (window.vibeVEP) {
+        if (window.vibeVEP.exampleVCF) {
+          virtualFS["example.vcf"] = window.vibeVEP.exampleVCF();
+        }
+        if (window.vibeVEP.exampleMAF) {
+          virtualFS["example.maf"] = window.vibeVEP.exampleMAF();
+        }
       }
       writeln("\x1b[32mReady!\x1b[0m Type \x1b[1mhelp\x1b[0m to get started.\n");
       writePrompt();
@@ -317,7 +323,23 @@
           return;
         }
 
-        writeln("Usage: vibe-vep annotate variant|vcf ...");
+        if (subSub === "maf") {
+          const file = parts[3];
+          if (!file) {
+            writeln("Usage: vibe-vep annotate maf <file>");
+          } else if (
+            virtualFS[file] !== undefined &&
+            virtualFS[file] !== null
+          ) {
+            writeln(window.vibeVEP.annotateMAF(virtualFS[file]));
+          } else {
+            writeln("Error: file not found: " + file);
+          }
+          writePrompt();
+          return;
+        }
+
+        writeln("Usage: vibe-vep annotate variant|vcf|maf ...");
         writePrompt();
         return;
       }

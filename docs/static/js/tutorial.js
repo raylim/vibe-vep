@@ -64,6 +64,14 @@
       command: "vibe-vep annotate vcf example.vcf",
     },
     {
+      title: "Annotate a MAF file",
+      content:
+        "<p>vibe-vep also supports MAF (Mutation Annotation Format), " +
+        "the standard format used by cBioPortal and TCGA. Let's view " +
+        "and annotate the example MAF file.</p>",
+      command: "vibe-vep annotate maf example.maf",
+    },
+    {
       title: "Explore on your own",
       content:
         "<p>You've completed the tutorial! Here are some things to try:</p>" +

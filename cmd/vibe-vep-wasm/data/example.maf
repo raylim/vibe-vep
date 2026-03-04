@@ -1,0 +1,4 @@
+Hugo_Symbol	Chromosome	Start_Position	End_Position	Reference_Allele	Tumor_Seq_Allele2	Variant_Type
+KRAS	12	25245351	25245351	C	A	SNP
+EGFR	7	55191822	55191822	T	G	SNP
+KRAS	12	25245350	25245351	CC	AA	DNP

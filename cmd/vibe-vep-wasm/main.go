@@ -14,6 +14,7 @@ import (
 
 	"github.com/inodb/vibe-vep/internal/annotate"
 	"github.com/inodb/vibe-vep/internal/cache"
+	"github.com/inodb/vibe-vep/internal/maf"
 	"github.com/inodb/vibe-vep/internal/vcf"
 )
 
@@ -22,6 +23,9 @@ var transcriptFS embed.FS
 
 //go:embed data/example.vcf
 var exampleVCF string
+
+//go:embed data/example.maf
+var exampleMAF string
 
 var (
 	txCache   *cache.Cache
@@ -38,10 +42,12 @@ func main() {
 	js.Global().Set("vibeVEP", map[string]interface{}{
 		"annotateVariant": js.FuncOf(annotateVariant),
 		"annotateVCF":     js.FuncOf(annotateVCF),
+		"annotateMAF":     js.FuncOf(annotateMAF),
 		"help":            js.FuncOf(help),
 		"version":         js.FuncOf(version),
 		"listGenes":       js.FuncOf(listGenes),
 		"exampleVCF":      js.FuncOf(getExampleVCF),
+		"exampleMAF":      js.FuncOf(getExampleMAF),
 		"ready":           js.FuncOf(ready),
 	})
 
@@ -201,12 +207,63 @@ func annotateVCF(_ js.Value, args []js.Value) interface{} {
 	return out.String()
 }
 
+func annotateMAF(_ js.Value, args []js.Value) interface{} {
+	defer func() {
+		if r := recover(); r != nil {
+			js.Global().Get("console").Call("error", fmt.Sprintf("panic: %v", r))
+		}
+	}()
+
+	if len(args) < 1 {
+		return "Error: missing MAF content"
+	}
+	content := args[0].String()
+
+	parser, err := maf.NewParserFromReader(strings.NewReader(content))
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+
+	var out strings.Builder
+	count := 0
+
+	for {
+		v, err := parser.Next()
+		if err != nil {
+			fmt.Fprintf(&out, "Error at variant %d: %s\n", count+1, err)
+			break
+		}
+		if v == nil {
+			break
+		}
+		count++
+
+		anns, err := ann.Annotate(v)
+		if err != nil {
+			fmt.Fprintf(&out, "Error annotating %s:%d: %s\n", v.Chrom, v.Pos, err)
+			continue
+		}
+
+		fmt.Fprintf(&out, "Variant %d: %s:%d %s>%s\n\n", count, v.Chrom, v.Pos, v.Ref, v.Alt)
+		out.WriteString(formatAnnotationTable(anns))
+		out.WriteString("\n")
+	}
+
+	if count == 0 {
+		return "No variants found in MAF content."
+	}
+
+	fmt.Fprintf(&out, "Annotated %d variant(s).\n", count)
+	return out.String()
+}
+
 func help(_ js.Value, _ []js.Value) interface{} {
 	return `vibe-vep — variant effect predictor (WASM demo)
 
 Commands:
   vibe-vep annotate variant <spec>   Annotate a single variant
   vibe-vep annotate vcf <file>       Annotate variants from a VCF file
+  vibe-vep annotate maf <file>       Annotate variants from a MAF file
   vibe-vep version                   Show version info
   vibe-vep genes                     List available genes
 
@@ -221,7 +278,7 @@ Shell commands:
   clear         Clear terminal
   help          Show this help
 
-This demo includes KRAS and MRPL39 transcripts (GRCh38).
+This demo includes KRAS and EGFR transcripts (GRCh38).
 `
 }
 
@@ -243,6 +300,10 @@ func listGenes(_ js.Value, _ []js.Value) interface{} {
 
 func getExampleVCF(_ js.Value, _ []js.Value) interface{} {
 	return exampleVCF
+}
+
+func getExampleMAF(_ js.Value, _ []js.Value) interface{} {
+	return exampleMAF
 }
 
 func ready(_ js.Value, _ []js.Value) interface{} {
