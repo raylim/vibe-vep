@@ -10,6 +10,17 @@
   max-width: 100%;
 }
 
+/* Hide page title and breadcrumbs, expand to full width */
+.hide-title main > h1,
+.hide-title main > .td-breadcrumbs {
+  display: none;
+}
+
+.hide-title main {
+  flex: 1;
+  max-width: 100%;
+}
+
 .tutorial-wrapper {
   display: flex;
   gap: 1.5rem;
