@@ -29,6 +29,16 @@ changelog:
       - "^docs:"
       - "^test:"
 
+dockers:
+  - image_templates:
+      - "ghcr.io/inodb/vibe-vep:{{ .Version }}"
+      - "ghcr.io/inodb/vibe-vep:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/inodb/vibe-vep"
+
 release:
   github:
     owner: inodb

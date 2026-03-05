@@ -1,0 +1,5 @@
+.git
+.claude
+testdata/tcga
+*.duckdb
+*.sqlite
