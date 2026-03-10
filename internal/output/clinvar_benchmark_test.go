@@ -116,36 +116,36 @@ func TestClinVarBenchmark(t *testing.T) {
 
 	var seMap snpEffVariantMap
 	var hasSnpEff bool
-	var snpEffLoadDur time.Duration
+	var snpEffAnnoDur time.Duration
 	if _, err := os.Stat(snpEffVCF); err == nil {
 		t.Log("Loading snpEff VCF …")
 		seStart := time.Now()
 		seMap, err = loadSnpEffVCF(snpEffVCF)
-		snpEffLoadDur = time.Since(seStart)
 		if err != nil {
 			t.Logf("  WARN: load snpEff VCF: %v", err)
 		} else {
-			t.Logf("  Loaded snpEff annotations for %d positions (%.1fs)", len(seMap.byPos), snpEffLoadDur.Seconds())
+			t.Logf("  Loaded snpEff annotations for %d positions (%.1fs)", len(seMap.byPos), time.Since(seStart).Seconds())
 			hasSnpEff = true
 		}
+		snpEffAnnoDur = readElapsedFile(filepath.Join(clinvarDir, "snpeff.elapsed"))
 	} else {
 		t.Log("snpEff VCF not found — skipping snpEff comparison")
 	}
 
 	var vepMap vepVariantMap
 	var hasVEP bool
-	var vepLoadDur time.Duration
+	var vepAnnoDur time.Duration
 	if _, err := os.Stat(vepVCF); err == nil {
 		t.Log("Loading VEP VCF …")
 		vepStart := time.Now()
 		vepMap, err = loadVEPVCF(vepVCF)
-		vepLoadDur = time.Since(vepStart)
 		if err != nil {
 			t.Logf("  WARN: load VEP VCF: %v", err)
 		} else {
-			t.Logf("  Loaded VEP annotations for %d positions (%.1fs)", len(vepMap.byPos), vepLoadDur.Seconds())
+			t.Logf("  Loaded VEP annotations for %d positions (%.1fs)", len(vepMap.byPos), time.Since(vepStart).Seconds())
 			hasVEP = true
 		}
+		vepAnnoDur = readElapsedFile(filepath.Join(clinvarDir, "vep.elapsed"))
 	} else {
 		t.Log("VEP VCF not found — skipping VEP comparison")
 	}
@@ -273,7 +273,7 @@ func TestClinVarBenchmark(t *testing.T) {
 	// Write report.
 	reportPath := filepath.Join(clinvarDir, "benchmark_report.md")
 	if err := writeClinVarReport(reportPath, entries, vibe, snpEff, vep, hasSnpEff, hasVEP,
-		vibeDur, vibeRate, cacheDur, cacheSource, snpEffLoadDur, vepLoadDur); err != nil {
+		vibeDur, vibeRate, cacheDur, cacheSource, snpEffAnnoDur, vepAnnoDur); err != nil {
 		t.Logf("WARN: write report: %v", err)
 	} else {
 		t.Logf("Report written to %s", reportPath)
@@ -533,7 +533,7 @@ func writeClinVarReport(
 	hasSnpEff, hasVEP bool,
 	vibeDur time.Duration, vibeRate float64,
 	cacheDur time.Duration, cacheSource string,
-	snpEffLoadDur, vepLoadDur time.Duration,
+	snpEffAnnoDur, vepAnnoDur time.Duration,
 ) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -621,20 +621,30 @@ func writeClinVarReport(
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "## Performance\n\n")
-	fmt.Fprintf(w, "_vibe-vep annotates in-process; snpEff and VEP are run offline and their VCFs loaded for scoring._\n\n")
-	fmt.Fprintf(w, "| Tool | Variants | Annotation Time | Rate | Notes |\n")
-	fmt.Fprintf(w, "|------|----------|-----------------|------|-------|\n")
-	fmt.Fprintf(w, "| vibe-vep | %d | %.1fs | %.0f v/s | Cache load: %.1fs from %s |\n",
-		len(entries), vibeDur.Seconds(), vibeRate, cacheDur.Seconds(), cacheSource)
+	fmt.Fprintf(w, "| Tool | Variants | Time | Rate |\n")
+	fmt.Fprintf(w, "|------|----------|------|------|\n")
+	fmt.Fprintf(w, "| vibe-vep | %d | %.1fs | %.0f v/s |\n", len(entries), vibeDur.Seconds(), vibeRate)
 	if hasSnpEff {
-		fmt.Fprintf(w, "| snpEff GRCh38.115 | %d | see `run_snpeff_clinvar.sh` | — | VCF load: %.1fs |\n",
-			len(entries), snpEffLoadDur.Seconds())
+		if snpEffAnnoDur > 0 {
+			snpEffRate := float64(len(entries)) / snpEffAnnoDur.Seconds()
+			fmt.Fprintf(w, "| snpEff GRCh38.115 | %d | %.0fs | %.0f v/s |\n",
+				len(entries), snpEffAnnoDur.Seconds(), snpEffRate)
+		} else {
+			fmt.Fprintf(w, "| snpEff GRCh38.115 | %d | — | — |\n", len(entries))
+		}
 	}
 	if hasVEP {
-		fmt.Fprintf(w, "| Ensembl VEP v115 | %d | see `run_vep_clinvar.sh` | — | VCF load: %.1fs |\n",
-			len(entries), vepLoadDur.Seconds())
+		if vepAnnoDur > 0 {
+			vepRate := float64(len(entries)) / vepAnnoDur.Seconds()
+			fmt.Fprintf(w, "| Ensembl VEP v115 | %d | %.0fs | %.0f v/s |\n",
+				len(entries), vepAnnoDur.Seconds(), vepRate)
+		} else {
+			fmt.Fprintf(w, "| Ensembl VEP v115 | %d | — | — |\n", len(entries))
+		}
 	}
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "_vibe-vep cache load: %.1fs from %s. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._\n\n",
+		cacheDur.Seconds(), cacheSource)
 	if !hasSnpEff && !hasVEP {
 		fmt.Fprintf(w, "_snpEff and VEP results not available. Run `run_snpeff_clinvar.sh` and `run_vep_clinvar.sh`._\n\n")
 	}
@@ -663,4 +673,18 @@ func countSignificance(entries []clv.SummaryEntry) map[string]int {
 		}
 	}
 	return m
+}
+
+// readElapsedFile reads a sidecar *.elapsed file written by annotation scripts.
+// Returns 0 if the file is missing or unparseable.
+func readElapsedFile(path string) time.Duration {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	var secs int64
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &secs); err != nil {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
 }

@@ -68,6 +68,9 @@ if [[ -f "$OUTPUT_VCF" && "$FORCE" -eq 0 ]]; then
   exit 0
 fi
 
+# Remove existing output so VEP doesn't skip due to its own file-exists check.
+[[ -f "$OUTPUT_VCF" ]] && rm -f "$OUTPUT_VCF"
+
 COUNT=$(zcat "$INPUT_VCF" | wc -l)
 echo "[clinvar-vep] Annotating $COUNT variants with Ensembl VEP (assembly=$ASSEMBLY, forks=$THREADS) ..."
 echo "[clinvar-vep] VEP command: ${VEP_RUN[*]}"
@@ -87,6 +90,7 @@ trap 'rm -f "$TMP_VCF"' EXIT
   zcat "$INPUT_VCF"
 } > "$TMP_VCF"
 
+ANNO_START=$SECONDS
 "${VEP_RUN[@]}" \
   --input_file "$TMP_VCF" \
   --output_file "$OUTPUT_VCF" \
@@ -106,10 +110,12 @@ trap 'rm -f "$TMP_VCF"' EXIT
   --numbers \
   --quiet \
   2>&1 | grep -v "^#" | tail -5 || true
+ELAPSED=$(( SECONDS - ANNO_START ))
 
 if [[ -f "$OUTPUT_VCF" ]]; then
   ANNOTATED=$(zcat "$OUTPUT_VCF" | grep -v '^#' | wc -l)
-  echo "[clinvar-vep] Done → $OUTPUT_VCF ($ANNOTATED variants annotated)"
+  echo "$ELAPSED" > "${OUTPUT_VCF%.vcf.gz}.elapsed"
+  echo "[clinvar-vep] Done → $OUTPUT_VCF ($ANNOTATED variants annotated, ${ELAPSED}s)"
 else
   echo "[clinvar-vep] ERROR: output VCF not created" >&2
   exit 1

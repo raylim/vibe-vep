@@ -92,6 +92,7 @@ trap 'rm -f "$TMP_VCF"' EXIT
   zcat "$INPUT_VCF"
 } > "$TMP_VCF"
 
+ANNO_START=$SECONDS
 java -Xmx12g -jar "$SNPEFF_JAR" ann \
     "${config_arg[@]}" \
     "${data_dir_arg[@]}" \
@@ -102,6 +103,8 @@ java -Xmx12g -jar "$SNPEFF_JAR" ann \
     "$SNPEFF_DB" \
     "$TMP_VCF" \
   | gzip -c > "$OUTPUT_VCF"
+ELAPSED=$(( SECONDS - ANNO_START ))
 
 COUNT=$(zcat "$OUTPUT_VCF" | grep -v '^#' | wc -l)
-echo "[clinvar-snpeff] Done → $OUTPUT_VCF ($COUNT variants annotated)"
+echo "$ELAPSED" > "${OUTPUT_VCF%.vcf.gz}.elapsed"
+echo "[clinvar-snpeff] Done → $OUTPUT_VCF ($COUNT variants annotated, ${ELAPSED}s)"
