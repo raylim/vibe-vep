@@ -45,3 +45,6 @@ dist/
 
 # TCGA test data (large MAF files, download with: make download-testdata)
 testdata/tcga/*.txt
+
+# Git worktrees
+.worktrees/
