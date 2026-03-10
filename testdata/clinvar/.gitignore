@@ -1,0 +1,6 @@
+# Generated VCF files — large, not committed.
+# Run scripts/prepare_clinvar.sh to regenerate.
+*.vcf.gz
+
+# Keep the benchmark report
+!benchmark_report.md
