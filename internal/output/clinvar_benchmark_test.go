@@ -53,7 +53,7 @@ func TestClinVarBenchmark(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse ClinVar summary: %v", err)
 	}
-	t.Logf("  Loaded %d pathogenic SNVs with protein HGVS (%.1fs)", len(entries), time.Since(loadStart).Seconds())
+	t.Logf("  Loaded %d pathogenic variants with protein HGVS (%.1fs)", len(entries), time.Since(loadStart).Seconds())
 
 	t.Log("Loading MANE Select mapping …")
 	maneMap, err := mane.Load(manePath)
@@ -161,11 +161,17 @@ func TestClinVarBenchmark(t *testing.T) {
 			Alt:   e.Alt,
 		}
 		expected := e.Protein // e.g. "p.Arg273Cys"
+		isIndel := e.VariantType != "snv"
 
 		// --- vibe-vep ---
 		{
 			anns := vibeAnns[i].anns
 			vibe.total++
+			if isIndel {
+				vibe.indelTotal++
+			} else {
+				vibe.snvTotal++
+			}
 			if e.IsMANE {
 				vibe.maneTotal++
 			}
@@ -174,6 +180,11 @@ func TestClinVarBenchmark(t *testing.T) {
 				if best.HGVSp != "" {
 					if normalizeProteinStr(best.HGVSp) == normalizeProteinStr(expected) {
 						vibe.exactMatch++
+						if isIndel {
+							vibe.indelExact++
+						} else {
+							vibe.snvExact++
+						}
 						if e.IsMANE {
 							vibe.maneExact++
 						}
@@ -203,6 +214,11 @@ func TestClinVarBenchmark(t *testing.T) {
 		if hasSnpEff {
 			seAnns := seMap.lookup(v)
 			snpEff.total++
+			if isIndel {
+				snpEff.indelTotal++
+			} else {
+				snpEff.snvTotal++
+			}
 			if e.IsMANE {
 				snpEff.maneTotal++
 			}
@@ -211,6 +227,11 @@ func TestClinVarBenchmark(t *testing.T) {
 				if best != nil && best.hgvsp != "" {
 					if normalizeProteinStr(best.hgvsp) == normalizeProteinStr(expected) {
 						snpEff.exactMatch++
+						if isIndel {
+							snpEff.indelExact++
+						} else {
+							snpEff.snvExact++
+						}
 						if e.IsMANE {
 							snpEff.maneExact++
 						}
@@ -238,6 +259,11 @@ func TestClinVarBenchmark(t *testing.T) {
 		if hasVEP {
 			vepAnns := vepMap.lookup(v)
 			vep.total++
+			if isIndel {
+				vep.indelTotal++
+			} else {
+				vep.snvTotal++
+			}
 			if e.IsMANE {
 				vep.maneTotal++
 			}
@@ -246,6 +272,11 @@ func TestClinVarBenchmark(t *testing.T) {
 				if best != nil && best.hgvsp != "" {
 					if normalizeProteinStr(best.hgvsp) == normalizeProteinStr(expected) {
 						vep.exactMatch++
+						if isIndel {
+							vep.indelExact++
+						} else {
+							vep.snvExact++
+						}
 						if e.IsMANE {
 							vep.maneExact++
 						}
@@ -286,20 +317,24 @@ func TestClinVarBenchmark(t *testing.T) {
 		}
 		return fmt.Sprintf("%.1f%%", 100*float64(n)/float64(d))
 	}
-	t.Logf("\nClinVar Benchmark Results (n=%d pathogenic SNVs, %d MANE Select)", len(entries), maneCount)
-	t.Logf("%-10s  %s  %s  %s  %s", "Tool", "HGVSp(best)", "HGVSp(any)", "Consequence", "MANE HGVSp")
-	t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s", "vibe-vep",
+	t.Logf("\nClinVar Benchmark Results (n=%d variants: %d SNVs + %d indels, %d MANE Select)",
+		len(entries), vibe.snvTotal, vibe.indelTotal, maneCount)
+	t.Logf("%-10s  %s  %s  %s  %s  %s  %s", "Tool", "HGVSp(best)", "HGVSp(any)", "Consequence", "MANE HGVSp", "SNV best", "Indel best")
+	t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "vibe-vep",
 		pct(vibe.exactMatch, vibe.total), pct(vibe.anyMatch, vibe.total),
-		pct(vibe.consequMatch, vibe.consequTotal), pct(vibe.maneExact, vibe.maneTotal))
+		pct(vibe.consequMatch, vibe.consequTotal), pct(vibe.maneExact, vibe.maneTotal),
+		pct(vibe.snvExact, vibe.snvTotal), pct(vibe.indelExact, vibe.indelTotal))
 	if hasSnpEff {
-		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s", "snpEff",
+		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "snpEff",
 			pct(snpEff.exactMatch, snpEff.total), pct(snpEff.anyMatch, snpEff.total),
-			pct(snpEff.consequMatch, snpEff.consequTotal), pct(snpEff.maneExact, snpEff.maneTotal))
+			pct(snpEff.consequMatch, snpEff.consequTotal), pct(snpEff.maneExact, snpEff.maneTotal),
+			pct(snpEff.snvExact, snpEff.snvTotal), pct(snpEff.indelExact, snpEff.indelTotal))
 	}
 	if hasVEP {
-		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s", "VEP",
+		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "VEP",
 			pct(vep.exactMatch, vep.total), pct(vep.anyMatch, vep.total),
-			pct(vep.consequMatch, vep.consequTotal), pct(vep.maneExact, vep.maneTotal))
+			pct(vep.consequMatch, vep.consequTotal), pct(vep.maneExact, vep.maneTotal),
+			pct(vep.snvExact, vep.snvTotal), pct(vep.indelExact, vep.indelTotal))
 	}
 }
 
@@ -307,6 +342,8 @@ func TestClinVarBenchmark(t *testing.T) {
 type clinvarCounts struct {
 	total, exactMatch, anyMatch, maneTotal, maneExact int
 	consequMatch, consequTotal, notAnnotated           int
+	snvTotal, snvExact                                 int
+	indelTotal, indelExact                             int
 }
 // Preference: MANE > higher-review-status > first seen.
 func deduplicateEntries(entries []clv.SummaryEntry) []clv.SummaryEntry {
@@ -392,35 +429,48 @@ func loadClinVarCache(t *testing.T) (*cache.Cache, string, time.Duration) {
 }
 
 // normalizeProteinStr normalizes a protein HGVS string for comparison.
-// It strips the "p." prefix, normalizes "Ter" to "*", and lowercases for robustness.
-// It returns the canonical form for string equality checks.
-var reProteinNorm = regexp.MustCompile(`(?i)ter\b`)
+//
+// ClinVar often stores abbreviated frameshift notation like p.Asp113fs, while
+// tools emit the full HGVS form p.Asp113ValfsTer15. Both are valid; we normalize
+// to the abbreviated form (first-affected AA + position + "fs") so they compare equal.
+var (
+	reProteinNorm = regexp.MustCompile(`(?i)ter\b`)
+	// reFsNorm matches full HGVS frameshift: XxxNNNYyyfs... and strips the new AA + stop.
+	reFsNorm = regexp.MustCompile(`^([A-Z][a-z]{2}\d+)[A-Z][a-z]{2}fs.*$`)
+)
 
 func normalizeProteinStr(p string) string {
 	p = strings.TrimPrefix(p, "p.")
 	p = strings.TrimSpace(p)
 	p = reProteinNorm.ReplaceAllString(p, "Ter")
+	// Normalize full HGVS frameshift to abbreviated form: XxxNNNYyyFsTerM → XxxNNNfs
+	if m := reFsNorm.FindStringSubmatch(p); m != nil {
+		return m[1] + "fs"
+	}
+	// Also strip bare "TerN" stop-distance suffix from already-abbreviated frameshift
+	if idx := strings.Index(p, "fs"); idx >= 0 && idx == len(p)-2 {
+		// already p.XxxNNNfs — good
+	}
 	return p
 }
 
 // inferConsequenceClass infers the expected SO consequence class from a protein HGVS string.
 func inferConsequenceClass(protein string) string {
 	p := strings.TrimPrefix(protein, "p.")
-	if strings.Contains(p, "fs") || strings.Contains(p, "Fs") {
-		return "frameshift"
-	}
-	if strings.Contains(p, "del") && !strings.Contains(p, "del"+strings.ToLower(p[3:6])) {
-		// p.delXxx or in-frame del — handled below
-	}
 	lower := strings.ToLower(p)
 	switch {
-	case strings.HasSuffix(lower, "ter") || strings.Contains(lower, "ter"):
+	case strings.Contains(lower, "fs"):
+		return "frameshift"
+	case strings.HasSuffix(lower, "ter") || strings.Contains(lower, "*"):
 		return "stop_gained"
 	case strings.Contains(lower, "="):
 		return "synonymous"
+	case strings.Contains(lower, "dup"):
+		return "inframe_insertion"
+	case strings.Contains(lower, "ins"):
+		return "inframe_insertion"
 	case strings.Contains(lower, "del"):
-		// Could be missense-adjacent or inframe
-		return "" // skip ambiguous
+		return "inframe_deletion"
 	default:
 		// Standard missense: p.Xxx123Yyy
 		if len(p) >= 7 && isAminoAcidCode(p[:3]) && isAminoAcidCode(p[len(p)-3:]) {
@@ -456,6 +506,10 @@ func consequenceMatches(toolConsequence, expected string) bool {
 		return strings.Contains(toolConsequence, "frameshift")
 	case "synonymous":
 		return strings.Contains(toolConsequence, "synonymous")
+	case "inframe_deletion":
+		return strings.Contains(toolConsequence, "inframe_deletion")
+	case "inframe_insertion":
+		return strings.Contains(toolConsequence, "inframe_insertion")
 	}
 	return false
 }
@@ -564,7 +618,7 @@ func writeClinVarReport(
 	fmt.Fprintf(w, "# ClinVar Independent Ground Truth Benchmark\n\n")
 	fmt.Fprintf(w, "Generated by `TestClinVarBenchmark` using ClinVar `variant_summary.txt.gz`.\n\n")
 	fmt.Fprintf(w, "## Methodology\n\n")
-	fmt.Fprintf(w, "**Ground truth**: ClinVar pathogenic/likely-pathogenic SNVs with curated protein\n")
+	fmt.Fprintf(w, "**Ground truth**: ClinVar pathogenic/likely-pathogenic SNVs and small indels with curated protein\n")
 	fmt.Fprintf(w, "HGVS annotations (from the `Name` field of `variant_summary.txt.gz`). ClinVar\n")
 	fmt.Fprintf(w, "annotations are submitted by clinical labs, expert panels, and NCBI curators —\n")
 	fmt.Fprintf(w, "independent of VEP, snpEff, or vibe-vep.\n\n")
@@ -574,8 +628,11 @@ func writeClinVarReport(
 	fmt.Fprintf(w, "making cross-tool HGVSp comparison directly meaningful.\n\n")
 	fmt.Fprintf(w, "**Database versions**: GENCODE v49 / Ensembl 115 (vibe-vep, VEP), snpEff GRCh38.115.\n\n")
 	fmt.Fprintf(w, "## Dataset\n\n")
+	snvCount, indelCount := countVariantTypes(entries)
 	fmt.Fprintf(w, "| Metric | Value |\n|--------|-------|\n")
-	fmt.Fprintf(w, "| Total pathogenic SNVs | %d |\n", len(entries))
+	fmt.Fprintf(w, "| Total pathogenic variants | %d |\n", len(entries))
+	fmt.Fprintf(w, "| SNVs | %d |\n", snvCount)
+	fmt.Fprintf(w, "| Indels (deletions, insertions, indels) | %d |\n", indelCount)
 	fmt.Fprintf(w, "| MANE Select transcripts | %d (%.0f%%) |\n", maneCount, 100*float64(maneCount)/float64(len(entries)))
 	for sig, n := range sigDist {
 		fmt.Fprintf(w, "| %s | %d |\n", sig, n)
@@ -596,6 +653,17 @@ func writeClinVarReport(
 			pct(vep.exactMatch, vep.total), pct(vep.anyMatch, vep.total), vep.notAnnotated)
 	}
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "### Protein HGVS Match by Variant Type\n\n")
+	fmt.Fprintf(w, "| Tool | SNV (n=%d) | Indel (n=%d) |\n", snvCount, indelCount)
+	fmt.Fprintf(w, "|------|-----------|-------------|\n")
+	fmt.Fprintf(w, "| vibe-vep | %s | %s |\n", pct(vibe.snvExact, vibe.snvTotal), pct(vibe.indelExact, vibe.indelTotal))
+	if hasSnpEff {
+		fmt.Fprintf(w, "| snpEff GRCh38.115 | %s | %s |\n", pct(snpEff.snvExact, snpEff.snvTotal), pct(snpEff.indelExact, snpEff.indelTotal))
+	}
+	if hasVEP {
+		fmt.Fprintf(w, "| Ensembl VEP v115 | %s | %s |\n", pct(vep.snvExact, vep.snvTotal), pct(vep.indelExact, vep.indelTotal))
+	}
+	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Protein HGVS Match (MANE Select transcripts only, n=%d)\n\n", maneCount)
 	fmt.Fprintf(w, "_MANE Select variants provide the fairest comparison: all tools should use_\n")
 	fmt.Fprintf(w, "_the same transcript, so protein notation differences reflect real errors._\n\n")
@@ -610,7 +678,8 @@ func writeClinVarReport(
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Consequence Class Match\n\n")
 	fmt.Fprintf(w, "_Inferred from protein notation: missense → `missense_variant`,_\n")
-	fmt.Fprintf(w, "_Ter/\\* suffix → `stop_gained`, `fs` → `frameshift_variant`._\n\n")
+	fmt.Fprintf(w, "_Ter/\\* suffix → `stop_gained`, `fs` → `frameshift_variant`,_\n")
+	fmt.Fprintf(w, "_`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._\n\n")
 	fmt.Fprintf(w, "| Tool | Consequence Match |\n|------|-------------------|\n")
 	fmt.Fprintf(w, "| vibe-vep | %s |\n", pct(vibe.consequMatch, vibe.consequTotal))
 	if hasSnpEff {
@@ -659,6 +728,18 @@ func writeClinVarReport(
 	fmt.Fprintf(w, "providing the most rigorous comparison of actual prediction accuracy.\n")
 
 	return w.Flush()
+}
+
+// countVariantTypes counts SNVs and indels in the entry set.
+func countVariantTypes(entries []clv.SummaryEntry) (snvCount, indelCount int) {
+	for _, e := range entries {
+		if e.VariantType == "snv" {
+			snvCount++
+		} else {
+			indelCount++
+		}
+	}
+	return
 }
 
 // countSignificance tallies the ClinicalSignificance values in the dataset.

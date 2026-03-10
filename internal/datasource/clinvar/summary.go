@@ -14,24 +14,25 @@ import (
 // SummaryEntry holds a single ClinVar variant_summary.txt.gz record
 // filtered and normalized for benchmarking.
 type SummaryEntry struct {
-	Chrom      string // e.g. "17"
-	Pos        int64  // VCF 1-based position
-	Ref        string // reference allele
-	Alt        string // alternate allele
-	Gene       string // gene symbol
-	Transcript string // RefSeq NM_ transcript (unversioned, e.g. "NM_000546")
-	Protein    string // protein notation e.g. "p.Arg273Cys"
-	ClnSig     string // e.g. "Pathogenic"
-	RevStatus  string // e.g. "reviewed by expert panel"
-	IsMANE     bool   // set later by caller after MANE lookup
+	Chrom       string // e.g. "17"
+	Pos         int64  // VCF 1-based position
+	Ref         string // reference allele
+	Alt         string // alternate allele
+	Gene        string // gene symbol
+	Transcript  string // RefSeq NM_ transcript (unversioned, e.g. "NM_000546")
+	Protein     string // protein notation e.g. "p.Arg273Cys"
+	ClnSig      string // e.g. "Pathogenic"
+	RevStatus   string // e.g. "reviewed by expert panel"
+	VariantType string // "snv", "deletion", "insertion", "indel"
+	IsMANE      bool   // set later by caller after MANE lookup
 }
 
 var reProtein = regexp.MustCompile(`\(p\.([^)]+)\)`)
 var reTranscript = regexp.MustCompile(`^([A-Z]{2}_\d+)`)
 
 // ParseSummaryFile reads a (optionally gzipped) ClinVar variant_summary.txt[.gz]
-// and returns all GRCh38 single-nucleotide pathogenic/likely-pathogenic entries
-// that carry a protein-level HGVS annotation.
+// and returns all GRCh38 pathogenic/likely-pathogenic SNVs and small indels
+// (deletions, insertions, indels) that carry a protein-level HGVS annotation.
 func ParseSummaryFile(path string) ([]SummaryEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -84,7 +85,8 @@ func ParseSummaryFile(path string) ([]SummaryEntry, error) {
 		if get("Assembly") != "GRCh38" {
 			continue
 		}
-		if get("Type") != "single nucleotide variant" {
+		variantType := classifyVariantType(get("Type"))
+		if variantType == "" {
 			continue
 		}
 
@@ -113,7 +115,9 @@ func ParseSummaryFile(path string) ([]SummaryEntry, error) {
 		if ref == "" || alt == "" || strings.EqualFold(ref, "na") || strings.EqualFold(alt, "na") {
 			continue
 		}
-		if len(ref) != 1 || len(alt) != 1 { // SNV only
+		// Skip alleles that aren't real nucleotide sequences (ClinVar sometimes
+		// stores "N/A" or symbolic values for structural variants).
+		if !isNucleotideSeq(ref) || !isNucleotideSeq(alt) {
 			continue
 		}
 
@@ -129,15 +133,16 @@ func ParseSummaryFile(path string) ([]SummaryEntry, error) {
 		}
 
 		entries = append(entries, SummaryEntry{
-			Chrom:      chrom,
-			Pos:        pos,
-			Ref:        ref,
-			Alt:        alt,
-			Gene:       get("GeneSymbol"),
-			Transcript: tx,
-			Protein:    protein,
-			ClnSig:     sig,
-			RevStatus:  rev,
+			Chrom:       chrom,
+			Pos:         pos,
+			Ref:         ref,
+			Alt:         alt,
+			Gene:        get("GeneSymbol"),
+			Transcript:  tx,
+			Protein:     protein,
+			ClnSig:      sig,
+			RevStatus:   rev,
+			VariantType: variantType,
 		})
 	}
 	if err := scanner.Err(); err != nil {
@@ -191,7 +196,36 @@ func isPathogenic(sig string) bool {
 	return strings.Contains(sig, "pathogenic")
 }
 
-// indexCols builds a map from column name to index (-1 if absent).
+// classifyVariantType maps ClinVar Type values to a normalized category.
+// Returns "" for unsupported types (structural variants, microsatellites, etc.).
+func classifyVariantType(clinvarType string) string {
+	switch clinvarType {
+	case "single nucleotide variant":
+		return "snv"
+	case "Deletion":
+		return "deletion"
+	case "Insertion":
+		return "insertion"
+	case "Indel":
+		return "indel"
+	}
+	return ""
+}
+
+// isNucleotideSeq returns true if s consists only of A/C/G/T/N characters.
+func isNucleotideSeq(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		switch c {
+		case 'A', 'C', 'G', 'T', 'N', 'a', 'c', 'g', 't', 'n':
+		default:
+			return false
+		}
+	}
+	return true
+}
 func indexCols(header []string, names ...string) map[string]int {
 	lookup := make(map[string]int, len(header))
 	for i, h := range header {

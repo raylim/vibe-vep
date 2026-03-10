@@ -6,7 +6,7 @@
 #   ~/.vibe-vep/clinvar/MANE.GRCh38.v1.5.summary.txt.gz  (MANE Select mapping, ~1 MB)
 #
 # Produces:
-#   testdata/clinvar/clinvar_patho.vcf.gz  — VCF of pathogenic SNVs with CLNP/CLNTX INFO
+#   testdata/clinvar/clinvar_patho.vcf.gz  — VCF of pathogenic SNVs and small indels with CLNP/CLNTX INFO
 #
 # Usage:
 #   bash scripts/prepare_clinvar.sh [--force]
@@ -66,12 +66,12 @@ if [[ "$FORCE" == "true" || ! -f "$OUT_VCF" ]]; then
   #
   # Filters applied:
   #   Assembly == GRCh38
-  #   Type == "single nucleotide variant"
+  #   Type in (single nucleotide variant, Deletion, Insertion, Indel)
   #   ClinicalSignificance contains "athogenic" (catches Pathogenic, Likely_pathogenic)
   #     but NOT "not Pathogenic" or "Conflicting"
   #   Name contains "(p." (has protein-level HGVS)
   #   PositionVCF is a positive integer
-  #   Ref and Alt are single nucleotides
+  #   Ref and Alt are non-empty nucleotide sequences (no "N/A" or symbolic alleles)
   #
   # Output VCF INFO fields:
   #   CLNP=p.Arg273Cys   (URL-encoded protein change)
@@ -109,13 +109,14 @@ NR==1 {
 
   # Filters
   if (assembly != "GRCh38") next
-  if (vartype  != "single nucleotide variant") next
+  if (vartype != "single nucleotide variant" &&
+      vartype != "Deletion" && vartype != "Insertion" && vartype != "Indel") next
   if (sig !~ /athogenic/) next
   if (sig ~ /not Pathogenic|Conflicting/) next
   if (name !~ /\(p\./) next
   if (posvcf+0 <= 0) next
-  if (length(ref) != 1 || length(alt) != 1) next
   if (ref ~ /^[Nn][Aa]$/ || alt ~ /^[Nn][Aa]$/) next
+  if (ref !~ /^[ACGTNacgtn]+$/ || alt !~ /^[ACGTNacgtn]+$/) next
 
   # Extract protein change: everything between "(p." and ")"
   if (match(name, /\(p\.([^)]+)\)/, arr)) {
