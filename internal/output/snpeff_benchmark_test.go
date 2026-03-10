@@ -381,7 +381,7 @@ func TestSnpEffBenchmark(t *testing.T) {
 		t.Skip("skipping benchmark in short mode")
 	}
 
-	tcgaDir := findTCGADir(t)
+	tcgaDir := findStudyDir(t, "tcga")
 	snpEffDir := filepath.Join(tcgaDir, "snpeff")
 	vepDir := filepath.Join(tcgaDir, "vep")
 
@@ -424,7 +424,7 @@ func TestSnpEffBenchmark(t *testing.T) {
 	}
 
 	// Load GENCODE transcripts (reuse the same helper as validation_benchmark_test.go).
-	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t)
+	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t, "GRCh38")
 	cacheDir := filepath.Dir(gtfPath)
 	c := cache.New()
 

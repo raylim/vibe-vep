@@ -57,10 +57,13 @@ _Ter/\* suffix → `stop_gained`, `fs` → `frameshift_variant`._
 
 ## Performance
 
-| Tool | Variants | Time | Rate |
-|------|----------|------|------|
-| vibe-vep | 139235 | 5.1s | 27067 v/s |
-_Cache load: 2.0s from duckdb cache_
+_vibe-vep annotates in-process; snpEff and VEP are run offline and their VCFs loaded for scoring._
+
+| Tool | Variants | Annotation Time | Rate | Notes |
+|------|----------|-----------------|------|-------|
+| vibe-vep | 139235 | 5.7s | 24283 v/s | Cache load: 2.0s from duckdb cache |
+| snpEff GRCh38.115 | 139235 | see `run_snpeff_clinvar.sh` | — | VCF load: 3.5s |
+| Ensembl VEP v115 | 139235 | see `run_vep_clinvar.sh` | — | VCF load: 4.6s |
 
 ## Interpretation
 
