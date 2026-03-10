@@ -1,0 +1,23 @@
+// Project-specific styles for vibe-vep docs.
+
+.validation-table {
+  font-variant-numeric: tabular-nums;
+
+  th, td {
+    white-space: nowrap;
+    padding: 0.4rem 0.6rem;
+  }
+
+  thead th {
+    border-bottom: 2px solid #dee2e6;
+  }
+
+  tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.03);
+  }
+
+  .totals-row {
+    border-top: 2px solid #dee2e6;
+    background-color: rgba(0, 0, 0, 0.05) !important;
+  }
+}

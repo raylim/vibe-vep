@@ -3,7 +3,7 @@ title: vibe-vep
 ---
 
 {{< blocks/cover title="vibe-vep" image_anchor="top" height="med" >}}
-<a class="btn btn-lg btn-primary me-3 mb-4" href="docs/getting-started/">
+<a class="btn btn-lg btn-primary me-3 mb-4" href="docs/how-to-use/getting-started/">
 Get Started <i class="fas fa-arrow-alt-circle-right ms-2"></i>
 </a>
 <a class="btn btn-lg btn-secondary me-3 mb-4" href="https://github.com/inodb/vibe-vep">

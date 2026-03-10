@@ -1,7 +1,9 @@
 ---
 title: Consequence Prediction
 description: How vibe-vep predicts variant consequences using Sequence Ontology terms.
-weight: 2
+weight: 1
+aliases:
+  - /docs/consequence-prediction/
 ---
 
 ## Supported Consequences

@@ -1,0 +1,33 @@
+{{ $table := .table }}
+{{ $caption := .caption }}
+<h3>{{ $caption }}</h3>
+<div class="table-responsive">
+  <table class="table validation-table">
+    <thead>
+      <tr>
+        {{ range $i, $col := $table.columns }}
+          {{ $align := index $table.align $i }}
+          <th style="text-align: {{ $align }}">{{ $col }}</th>
+        {{ end }}
+      </tr>
+    </thead>
+    <tbody>
+      {{ range $table.rows }}
+        <tr>
+          {{ range $i, $val := . }}
+            {{ $align := index $table.align $i }}
+            <td style="text-align: {{ $align }}">{{ $val }}</td>
+          {{ end }}
+        </tr>
+      {{ end }}
+      {{ with $table.totals }}
+        <tr class="totals-row">
+          {{ range $i, $val := . }}
+            {{ $align := index $table.align $i }}
+            <td style="text-align: {{ $align }}"><strong>{{ $val }}</strong></td>
+          {{ end }}
+        </tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>

@@ -35,7 +35,7 @@ func TestAnnotationSourcesBenchmark(t *testing.T) {
 	}
 
 	// Find TCGA MAF files.
-	tcgaDir := findTCGADir(t)
+	tcgaDir := findStudyDir(t, "tcga")
 	mafFiles, err := filepath.Glob(filepath.Join(tcgaDir, "*_data_mutations.txt"))
 	if err != nil {
 		t.Fatalf("glob MAF files: %v", err)
@@ -46,7 +46,7 @@ func TestAnnotationSourcesBenchmark(t *testing.T) {
 	sort.Strings(mafFiles)
 
 	// Load GENCODE cache.
-	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t)
+	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t, "GRCh38")
 	c := cache.New()
 	loader := cache.NewGENCODELoader(gtfPath, fastaPath)
 	if canonicalPath != "" {

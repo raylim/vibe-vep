@@ -1,7 +1,7 @@
 ---
 title: Development
 description: Setting up a development environment and contributing to vibe-vep.
-weight: 6
+weight: 4
 ---
 
 ## Prerequisites

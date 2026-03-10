@@ -1,6 +1,8 @@
 ---
 title: Browser Query
-weight: 7
+weight: 5
+aliases:
+  - /docs/browser-query/
 ---
 
 # Browser-Based Variant Lookup

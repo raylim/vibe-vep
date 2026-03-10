@@ -2,6 +2,8 @@
 title: Annotation Sources
 description: Data sources available for variant annotation.
 weight: 3
+aliases:
+  - /docs/annotation-sources/
 ---
 
 ## Core

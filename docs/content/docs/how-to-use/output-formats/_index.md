@@ -2,6 +2,8 @@
 title: Output Formats
 description: VCF and MAF output format details.
 weight: 4
+aliases:
+  - /docs/output-formats/
 ---
 
 ## VCF Output (default for VCF input)

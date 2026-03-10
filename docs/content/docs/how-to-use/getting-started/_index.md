@@ -2,6 +2,8 @@
 title: Getting Started
 description: Install vibe-vep and annotate your first variants.
 weight: 1
+aliases:
+  - /docs/getting-started/
 ---
 
 ## Installation

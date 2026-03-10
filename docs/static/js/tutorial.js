@@ -82,7 +82,7 @@
         '<li><code>vibe-vep annotate variant KRAS c.35G>T</code> — HGVSc notation</li>' +
         '<li><code>vibe-vep version</code> — version info</li>' +
         "</ul>" +
-        "<p>See the <a href='/vibe-vep/docs/getting-started/'>Getting Started</a> " +
+        "<p>See the <a href='/vibe-vep/docs/how-to-use/getting-started/'>Getting Started</a> " +
         "guide to install the full CLI.</p>",
       command: "vibe-vep genes",
     },

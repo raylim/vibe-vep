@@ -53,3 +53,6 @@ testdata/tcga/snpeff_benchmark_report.md
 
 # Git worktrees
 .worktrees/
+
+# GRCh37 test data (large MAF files, download with: scripts/download_grch37.sh)
+testdata/grch37/*.txt

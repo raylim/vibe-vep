@@ -1,7 +1,9 @@
 ---
 title: Architecture
 description: Technical architecture of vibe-vep.
-weight: 5
+weight: 2
+aliases:
+  - /docs/architecture/
 ---
 
 ## Overview
