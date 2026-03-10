@@ -12,6 +12,7 @@ import (
 
 	"github.com/inodb/vibe-vep/internal/annotate"
 	"github.com/inodb/vibe-vep/internal/duckdb"
+	"github.com/inodb/vibe-vep/internal/genomicindex"
 	"github.com/inodb/vibe-vep/internal/maf"
 	"github.com/inodb/vibe-vep/internal/output"
 	"github.com/inodb/vibe-vep/internal/vcf"
@@ -514,6 +515,18 @@ func runMAFOutput(logger *zap.Logger, parser *maf.Parser, ann *annotate.Annotato
 		return fmt.Errorf("writing header: %w", err)
 	}
 
+	// Detect a preloaded GenomicSource so we can use the batch path.
+	var genomicSrc *genomicindex.GenomicSource
+	var otherSources []annotate.AnnotationSource
+	for _, src := range sources {
+		if gs, ok := src.(*genomicindex.GenomicSource); ok && gs.IsPreloaded() {
+			genomicSrc = gs
+		} else {
+			otherSources = append(otherSources, src)
+		}
+	}
+	useBatch := genomicSrc != nil
+
 	// Parse variants in a goroutine, send to worker pool.
 	items := make(chan annotate.WorkItem, 2*runtime.NumCPU())
 	var parseErr error
@@ -540,6 +553,14 @@ func runMAFOutput(logger *zap.Logger, parser *maf.Parser, ann *annotate.Annotato
 		logger.Info("progress", zap.Int("variants_processed", n))
 	}
 
+	// bufferedRow holds a single collected result awaiting genomic enrichment.
+	type bufferedRow struct {
+		rawFields []string
+		variant   *vcf.Variant
+		best      *annotate.Annotation
+	}
+	var buf []bufferedRow
+
 	if err := annotate.OrderedCollectWithProgress(results, 2*time.Second, progress, func(r annotate.WorkResult) error {
 		mafAnn := r.Extra.(*maf.MAFAnnotation)
 		if r.Err != nil {
@@ -547,10 +568,14 @@ func runMAFOutput(logger *zap.Logger, parser *maf.Parser, ann *annotate.Annotato
 				zap.String("chrom", r.Variant.Chrom),
 				zap.Int64("pos", r.Variant.Pos),
 				zap.Error(r.Err))
+			if useBatch {
+				buf = append(buf, bufferedRow{rawFields: mafAnn.RawFields, variant: r.Variant})
+				return nil
+			}
 			return mafWriter.WriteRow(mafAnn.RawFields, nil, r.Variant)
 		}
 
-		// Collect all results for DuckDB persistence
+		// Collect all results for DuckDB persistence.
 		if newResults != nil && len(r.Anns) > 0 {
 			chrom := r.Variant.NormalizeChrom()
 			for _, a := range r.Anns {
@@ -566,7 +591,21 @@ func runMAFOutput(logger *zap.Logger, parser *maf.Parser, ann *annotate.Annotato
 		} else {
 			best = output.SelectBestAnnotation(mafAnn, r.Anns)
 		}
-		// Enrich best annotation with annotation sources
+
+		// Apply non-genomic sources per-variant (fast: oncokb, hotspots).
+		if best != nil {
+			for _, src := range otherSources {
+				src.Annotate(r.Variant, []*annotate.Annotation{best})
+			}
+		}
+
+		if useBatch {
+			// Defer genomic enrichment; buffer for single BatchAnnotate call.
+			buf = append(buf, bufferedRow{rawFields: mafAnn.RawFields, variant: r.Variant, best: best})
+			return nil
+		}
+
+		// Streaming path: per-variant genomic source enrichment.
 		if best != nil {
 			for _, src := range sources {
 				src.Annotate(r.Variant, []*annotate.Annotation{best})
@@ -579,6 +618,23 @@ func runMAFOutput(logger *zap.Logger, parser *maf.Parser, ann *annotate.Annotato
 
 	if parseErr != nil {
 		return parseErr
+	}
+
+	// Batch path: one BatchAnnotate call for all variants, then write.
+	if useBatch && len(buf) > 0 {
+		variants := make([]*vcf.Variant, len(buf))
+		bests := make([]*annotate.Annotation, len(buf))
+		for i, row := range buf {
+			variants[i] = row.variant
+			bests[i] = row.best
+		}
+		genomicSrc.BatchAnnotate(variants, bests)
+		for i, row := range buf {
+			if err := mafWriter.WriteRow(row.rawFields, row.best, row.variant); err != nil {
+				return err
+			}
+			_ = i
+		}
 	}
 
 	return mafWriter.Flush()
