@@ -340,7 +340,7 @@ func formatAnnotationTable(anns []*annotate.Annotation) string {
 	for i, a := range anns {
 		canon := "no"
 		if a.IsCanonical {
-			canon = "YES"
+			canon = "yes"
 		}
 		r := row{a.GeneName, a.TranscriptID, canon, a.Consequence, a.Impact, a.HGVSc, a.HGVSp}
 		rows[i] = r
