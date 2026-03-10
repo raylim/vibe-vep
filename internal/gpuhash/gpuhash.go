@@ -60,6 +60,8 @@ import (
 )
 
 // Table wraps a GPU-resident open-addressing hash table.
+// Slots are maintained in CPU memory in open-addressing format and uploaded
+// to the device on first use (lazy via flush).
 type Table struct {
 	dTable   unsafe.Pointer // device memory for Slot array
 	dHashes  unsafe.Pointer // device buffer for query hashes (reused across calls)
@@ -67,6 +69,10 @@ type Table struct {
 	capacity uint64
 	count    uint64
 	bufSize  uint32 // current size of the device hash/result buffers (in entries)
+
+	// cpuSlots holds the open-addressing table in host memory for building.
+	cpuSlots []Slot
+	dirty    bool // true when cpuSlots has been modified since last upload
 }
 
 // NewTable allocates a GPU hash table with at least minCapacity slots.
@@ -80,10 +86,58 @@ func NewTable(minCapacity uint64) (*Table, error) {
 	if d == nil {
 		return nil, fmt.Errorf("gpuhash: cudaMalloc failed for %d slots", cap)
 	}
-	return &Table{dTable: d, capacity: cap}, nil
+	return &Table{dTable: d, capacity: cap, cpuSlots: make([]Slot, cap)}, nil
 }
 
-// LoadSlots uploads a slice of Slots into the device table starting at offset.
+// Insert adds or updates a slot using CPU-side open addressing.
+// Changes are uploaded to device memory on the next BatchLookup call.
+func (t *Table) Insert(s Slot) {
+	if s.Hash == 0 {
+		return
+	}
+	idx := s.Hash & (t.capacity - 1)
+	for {
+		cur := &t.cpuSlots[idx]
+		if cur.Hash == 0 || cur.Hash == s.Hash {
+			if cur.Hash == 0 {
+				t.count++
+			}
+			*cur = s
+			t.dirty = true
+			return
+		}
+		idx = (idx + 1) & (t.capacity - 1)
+	}
+}
+
+// flush uploads the CPU-side slot array to device memory if it has been
+// modified since the last upload.
+func (t *Table) flush() error {
+	if !t.dirty {
+		return nil
+	}
+	if err := t.LoadSlots(t.cpuSlots, 0); err != nil {
+		return err
+	}
+	t.dirty = false
+	return nil
+}
+
+// Lookup performs a single GPU lookup. For high-throughput use BatchLookup.
+func (t *Table) Lookup(hash uint64) (Value, bool) {
+	if err := t.flush(); err != nil {
+		return Value{}, false
+	}
+	out := make([]Value, 1)
+	if err := t.BatchLookup([]uint64{hash}, out); err != nil {
+		return Value{}, false
+	}
+	v := out[0]
+	found := v != (Value{})
+	return v, found
+}
+
+
 // Call this after NewTable to populate the table from host-side data.
 func (t *Table) LoadSlots(slots []Slot, offset uint64) error {
 	if len(slots) == 0 {
@@ -106,6 +160,9 @@ func (t *Table) LoadSlots(slots []Slot, offset uint64) error {
 // results to out.  len(out) must equal len(hashes).
 // Device buffers are reused/grown as needed.
 func (t *Table) BatchLookup(hashes []uint64, out []Value) error {
+	if err := t.flush(); err != nil {
+		return err
+	}
 	n := uint32(len(hashes))
 	if n == 0 {
 		return nil
