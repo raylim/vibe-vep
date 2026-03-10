@@ -38,37 +38,31 @@ MAF files may use different consequence terms than SO standard. The validation n
 - **Upstream/downstream tolerance**: MAF upstream/downstream calls are always accepted as matching, since different canonical transcript sets produce different transcript boundaries
 - **Sorting**: Comma-separated terms are sorted alphabetically for consistent comparison
 
-## Validation Results
+## GRCh38 Results (TCGA)
 
-Tested against 7 TCGA GDC studies from [cBioPortal/datahub](https://github.com/cBioPortal/datahub) (1,052,366 total variants):
+Tested against 7 TCGA GDC studies from [cBioPortal/datahub](https://github.com/cBioPortal/datahub):
 
-| Column | Match | Mismatch | Rate |
-|--------|-------|----------|------|
-| Consequence | 1,050,079 | 46 | 99.8% |
-| HGVSp | 997,292 | 282 | 94.8% |
-| HGVSc | 1,037,748 | 278 | 98.6% |
+{{< validation-report assembly="grch38" >}}
 
-Mismatches that are due to GENCODE version differences (not algorithm bugs) are reclassified into separate categories:
-- **transcript_model_change** (501): transcript biotype changed between versions (e.g. protein_coding to retained_intron)
-- **gene_model_change** (4): gene boundary differences (coding vs intergenic)
-- **position_shift** (695 consequence, 4,733 HGVSp, 5,753 HGVSc): CDS coordinate changes between GENCODE versions
+## GRCh37 Results (MSK-IMPACT)
 
-The validation also tracks mismatches in [OncoKB cancer genes](https://www.oncokb.org/cancerGenes) — only 9 cancer genes have any mismatches (1 each) across 1M+ variants.
+{{< validation-report assembly="grch37" >}}
 
-See the full [validation report](https://github.com/inodb/vibe-vep/blob/main/testdata/tcga/validation_report.md) for per-study breakdowns and category details.
+## Reproducing Validation
 
-### Reproducing Validation
-
-To download the TCGA test data and regenerate the report:
+To download test data and regenerate the reports:
 
 ```bash
+# Download all test data
 make download-testdata
-go test ./internal/output/ -run TestValidationBenchmark -v -count=1
+
+# Run GRCh38 validation
+go test ./internal/output/ -run TestValidationBenchmark$ -v -count=1 -timeout 30m
+
+# Run GRCh37 validation
+go test ./internal/output/ -run TestValidationBenchmarkGRCh37 -v -count=1 -timeout 30m
 ```
 
-### Remaining Mismatches
-
-The 46 consequence mismatches are primarily:
-- CDS sequence differences between GENCODE versions (synonymous vs missense)
-- Transcript structure differences (exon/intron boundary changes)
-- Complex multi-region indels with ambiguous consequence priority
+Full markdown reports are also available:
+- [GRCh38 report](https://github.com/inodb/vibe-vep/blob/main/testdata/tcga/validation_report.md)
+- [GRCh37 report](https://github.com/inodb/vibe-vep/blob/main/testdata/grch37/validation_report.md)

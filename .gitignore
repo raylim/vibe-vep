@@ -45,3 +45,6 @@ dist/
 
 # TCGA test data (large MAF files, download with: make download-testdata)
 testdata/tcga/*.txt
+
+# GRCh37 test data (large MAF files, download with: scripts/download_grch37.sh)
+testdata/grch37/*.txt

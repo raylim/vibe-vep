@@ -1,0 +1,93 @@
+{{/* validation-report.html — renders validation JSON data as styled HTML tables */}}
+{{ $assembly := .Get "assembly" }}
+{{ $data := index .Site.Data (printf "%s_validation" $assembly) }}
+
+{{ if not $data }}
+<div class="alert alert-warning">
+  No validation data found for assembly <code>{{ $assembly }}</code>.
+  Run the validation benchmark to generate <code>docs/data/{{ $assembly }}_validation.json</code>.
+</div>
+{{ else }}
+
+<p>
+  Generated: {{ $data.generated }}<br>
+  Assembly: {{ $data.assembly }}<br>
+  GENCODE transcripts: {{ $data.transcripts }} (loaded from {{ $data.load_source }} in {{ $data.load_duration }})<br>
+  Workers: {{ $data.workers }} (GOMAXPROCS)
+</p>
+
+{{/* Generic table renderer */}}
+{{ define "validation-table" }}
+  {{ $table := .table }}
+  {{ $caption := .caption }}
+  <h3>{{ $caption }}</h3>
+  <div class="table-responsive">
+    <table class="table validation-table">
+      <thead>
+        <tr>
+          {{ range $i, $col := $table.columns }}
+            {{ $align := index $table.align $i }}
+            <th style="text-align: {{ $align }}">{{ $col }}</th>
+          {{ end }}
+        </tr>
+      </thead>
+      <tbody>
+        {{ range $table.rows }}
+          <tr>
+            {{ range $i, $val := . }}
+              {{ $align := index $table.align $i }}
+              <td style="text-align: {{ $align }}">{{ $val }}</td>
+            {{ end }}
+          </tr>
+        {{ end }}
+        {{ with $table.totals }}
+          <tr class="totals-row">
+            {{ range $i, $val := . }}
+              {{ $align := index $table.align $i }}
+              <td style="text-align: {{ $align }}"><strong>{{ $val }}</strong></td>
+            {{ end }}
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+{{ end }}
+
+{{ template "validation-table" (dict "table" $data.match_rates "caption" "Match Rates") }}
+
+{{ range $name, $table := $data.category_breakdowns }}
+  {{ template "validation-table" (dict "table" $table "caption" (printf "%s Category Breakdown" $name)) }}
+{{ end }}
+
+{{ with $data.cancer_genes }}
+  <h3>Cancer Gene Mismatches</h3>
+  {{ if eq .genes_with_mismatches 0 }}
+    <p>No mismatches across all {{ .total_genes }} cancer genes tested.</p>
+  {{ else }}
+    <p>{{ sub .total_genes .genes_with_mismatches }}/{{ .total_genes }} cancer genes have 100% match. Mismatches in {{ .genes_with_mismatches }} gene(s):</p>
+    <div class="table-responsive">
+      <table class="table validation-table">
+        <thead>
+          <tr>
+            {{ range .columns }}
+              <th>{{ . }}</th>
+            {{ end }}
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .rows }}
+            <tr>
+              {{ range . }}
+                <td>{{ . }}</td>
+              {{ end }}
+            </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+  {{ end }}
+{{ end }}
+
+{{ template "validation-table" (dict "table" $data.performance "caption" "Performance") }}
+
+{{ end }}

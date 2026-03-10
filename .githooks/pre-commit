@@ -1,27 +1,29 @@
 #!/bin/sh
 #
-# Pre-commit hook: ensure TCGA reports contain all 7 studies when committed.
+# Pre-commit hook: ensure validation reports contain all expected studies when committed.
 
-STUDIES="blca_tcga_gdc brca_tcga_gdc chol_tcga_gdc coad_tcga_gdc gbm_tcga_gdc luad_tcga_gdc skcm_tcga_gdc"
+TCGA_STUDIES="blca_tcga_gdc brca_tcga_gdc chol_tcga_gdc coad_tcga_gdc gbm_tcga_gdc luad_tcga_gdc skcm_tcga_gdc"
+GRCH37_STUDIES="msk_impact_50k_2026"
 
 check_report() {
     report="$1"
     label="$2"
     test_cmd="$3"
+    studies="$4"
 
     if ! git diff --cached --name-only | grep -q "^${report}$"; then
         return 0
     fi
 
     missing=""
-    for study in $STUDIES; do
+    for study in $studies; do
         if ! git show ":${report}" | grep -q "| ${study} |"; then
             missing="${missing}  - ${study}\n"
         fi
     done
 
     if [ -n "$missing" ]; then
-        echo "ERROR: ${report} is missing TCGA studies:"
+        echo "ERROR: ${report} is missing studies:"
         printf "$missing"
         echo ""
         echo "Run the full ${label} before committing:"
@@ -36,12 +38,21 @@ check_report \
     "testdata/tcga/validation_report.md" \
     "validation benchmark" \
     "CGO_ENABLED=1 ~/go/bin/go1.24.0 test ./internal/output/ -run TestValidationBenchmark -v -count=1 -timeout 30m" \
+    "$TCGA_STUDIES" \
     || err=1
 
 check_report \
     "testdata/tcga/annotation_sources_report.md" \
     "annotation sources benchmark" \
     "CGO_ENABLED=1 ~/go/bin/go1.24.0 test ./internal/output/ -run TestAnnotationSourcesBenchmark -v -count=1 -timeout 30m" \
+    "$TCGA_STUDIES" \
+    || err=1
+
+check_report \
+    "testdata/grch37/validation_report.md" \
+    "GRCh37 validation benchmark" \
+    "CGO_ENABLED=1 ~/go/bin/go1.24.0 test ./internal/output/ -run TestValidationBenchmarkGRCh37 -v -count=1 -timeout 30m" \
+    "$GRCH37_STUDIES" \
     || err=1
 
 exit $err

@@ -1,6 +1,7 @@
 package output_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,34 +19,87 @@ import (
 	"github.com/inodb/vibe-vep/internal/output"
 )
 
-// TestValidationBenchmark runs comparison against all TCGA MAF files and generates
-// a markdown report at testdata/tcga/validation_report.md.
+// TestValidationBenchmark runs comparison against all TCGA MAF files (GRCh38)
+// and generates a markdown report at testdata/tcga/validation_report.md.
 //
 // Skipped with -short (large files, not for CI). Run with:
 //
-//	go test ./internal/output/ -run TestValidationBenchmark -v -count=1
+//	go test ./internal/output/ -run TestValidationBenchmark$ -v -count=1
 func TestValidationBenchmark(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping validation benchmark in short mode")
 	}
 
-	// Find TCGA MAF files
-	tcgaDir := findTCGADir(t)
-	mafFiles, err := filepath.Glob(filepath.Join(tcgaDir, "*_data_mutations.txt"))
+	studyDir := findStudyDir(t, "tcga")
+	mafFiles, err := filepath.Glob(filepath.Join(studyDir, "*_data_mutations.txt"))
 	if err != nil {
 		t.Fatalf("glob MAF files: %v", err)
 	}
 	if len(mafFiles) == 0 {
-		t.Skip("no TCGA MAF files found in", tcgaDir)
+		t.Skip("no TCGA MAF files found in", studyDir)
 	}
 	sort.Strings(mafFiles)
 
-	// Load GENCODE transcripts, preferring gob cache over raw GTF/FASTA.
-	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t)
-	cacheDir := filepath.Dir(gtfPath)
-	c := cache.New()
+	c, cacheDuration, loadSource := loadGENCODECache(t, "GRCh38")
+	cgl := loadCancerGeneList(t)
+	results := runValidationStudies(t, mafFiles, c, cgl)
 
-	var loadSource string
+	reportPath := filepath.Join(studyDir, "validation_report.md")
+	meta := reportMeta{
+		Assembly:        "GRCh38",
+		TranscriptCount: c.TranscriptCount(),
+		CacheDuration:   cacheDuration,
+		LoadSource:      loadSource,
+	}
+	writeReport(t, reportPath, results, meta.TranscriptCount, meta.CacheDuration, meta.LoadSource, cgl, meta.Assembly)
+	writeReportJSON(t, findDocsDataPath(t, "grch38_validation.json"), results, meta, cgl)
+}
+
+// TestValidationBenchmarkGRCh37 runs comparison against GRCh37 MAF files
+// and generates a markdown report at testdata/grch37/validation_report.md.
+//
+// Skipped with -short or when GRCh37 GENCODE cache is not available. Run with:
+//
+//	go test ./internal/output/ -run TestValidationBenchmarkGRCh37 -v -count=1 -timeout 30m
+func TestValidationBenchmarkGRCh37(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping validation benchmark in short mode")
+	}
+
+	studyDir := findStudyDir(t, "grch37")
+	mafFiles, err := filepath.Glob(filepath.Join(studyDir, "*_data_mutations.txt"))
+	if err != nil {
+		t.Fatalf("glob MAF files: %v", err)
+	}
+	if len(mafFiles) == 0 {
+		t.Skipf("no GRCh37 MAF files found in %s — run: scripts/download_grch37.sh", studyDir)
+	}
+	sort.Strings(mafFiles)
+
+	c, cacheDuration, loadSource := loadGENCODECache(t, "GRCh37")
+	cgl := loadCancerGeneList(t)
+	results := runValidationStudies(t, mafFiles, c, cgl)
+
+	reportPath := filepath.Join(studyDir, "validation_report.md")
+	meta := reportMeta{
+		Assembly:        "GRCh37",
+		TranscriptCount: c.TranscriptCount(),
+		CacheDuration:   cacheDuration,
+		LoadSource:      loadSource,
+	}
+	writeReport(t, reportPath, results, meta.TranscriptCount, meta.CacheDuration, meta.LoadSource, cgl, meta.Assembly)
+	writeReportJSON(t, findDocsDataPath(t, "grch37_validation.json"), results, meta, cgl)
+}
+
+// loadGENCODECache loads GENCODE transcripts for the given assembly,
+// preferring gob cache over raw GTF/FASTA. Skips the test if files are not found.
+func loadGENCODECache(t *testing.T, assembly string) (c *cache.Cache, duration time.Duration, source string) {
+	t.Helper()
+
+	gtfPath, fastaPath, canonicalPath := findGENCODEFiles(t, assembly)
+	cacheDir := filepath.Dir(gtfPath)
+	c = cache.New()
+
 	cacheStart := time.Now()
 
 	tc := duckdb.NewTranscriptCache(cacheDir)
@@ -60,7 +114,7 @@ func TestValidationBenchmark(t *testing.T) {
 		if err := tc.Load(c); err != nil {
 			t.Fatalf("load transcript cache: %v", err)
 		}
-		loadSource = "gob cache"
+		source = "gob cache"
 	} else {
 		loader := cache.NewGENCODELoader(gtfPath, fastaPath)
 		if canonicalPath != "" {
@@ -74,15 +128,19 @@ func TestValidationBenchmark(t *testing.T) {
 		if err := loader.Load(c); err != nil {
 			t.Fatalf("load GENCODE: %v", err)
 		}
-		loadSource = "GTF/FASTA"
+		source = "GTF/FASTA"
 	}
 
 	c.BuildIndex()
-	cacheDuration := time.Since(cacheStart)
-	t.Logf("loaded %d transcripts from %s in %s", c.TranscriptCount(), loadSource, cacheDuration.Round(time.Millisecond))
+	duration = time.Since(cacheStart)
+	t.Logf("loaded %d transcripts from %s in %s", c.TranscriptCount(), source, duration.Round(time.Millisecond))
+	return c, duration, source
+}
 
-	// Load cancer gene list
-	cgl := loadCancerGeneList(t)
+// runValidationStudies iterates MAF files, annotates variants, categorizes
+// results, and runs parallel benchmarks. Returns per-study results.
+func runValidationStudies(t *testing.T, mafFiles []string, c *cache.Cache, cgl oncokb.CancerGeneList) []studyResult {
+	t.Helper()
 
 	categorizer := &output.Categorizer{}
 	comparedColumns := []string{"Consequence", "HGVSp_Short", "HGVSc"}
@@ -91,7 +149,6 @@ func TestValidationBenchmark(t *testing.T) {
 	for _, mafFile := range mafFiles {
 		name := studyName(mafFile)
 		t.Run(name, func(t *testing.T) {
-			// --- Sequential pass (validation + accuracy) ---
 			parser, err := maf.NewParser(mafFile)
 			if err != nil {
 				t.Fatalf("open MAF: %v", err)
@@ -100,7 +157,6 @@ func TestValidationBenchmark(t *testing.T) {
 
 			ann := annotate.NewAnnotator(c)
 
-			// Track category counts and cancer gene mismatches
 			catCounts := make(map[string]map[output.Category]int)
 			for _, col := range comparedColumns {
 				catCounts[col] = make(map[output.Category]int)
@@ -126,7 +182,6 @@ func TestValidationBenchmark(t *testing.T) {
 
 				bestAnn := output.SelectBestAnnotation(mafAnn, vepAnns)
 
-				// Build left (original MAF) and right (prediction) maps
 				left := map[string]string{
 					"Consequence": mafAnn.Consequence,
 					"HGVSp_Short": mafAnn.HGVSpShort,
@@ -146,12 +201,10 @@ func TestValidationBenchmark(t *testing.T) {
 				cats := categorizer.CategorizeRow(comparedColumns, left, right,
 					comparedColumns, comparedColumns)
 
-				// Update category counts
 				for _, col := range comparedColumns {
 					catCounts[col][cats[col]]++
 				}
 
-				// Track cancer gene mismatches
 				if cgl != nil && cgl.IsCancerGene(mafAnn.HugoSymbol) {
 					gene := mafAnn.HugoSymbol
 					geneTotal[gene]++
@@ -167,11 +220,9 @@ func TestValidationBenchmark(t *testing.T) {
 			}
 			seqDuration := time.Since(start)
 
-			// Extract consequence counts
 			conseqMatch := catCounts["Consequence"][output.CatMatch] + catCounts["Consequence"][output.CatUpstreamReclass]
 			conseqMismatch := catCounts["Consequence"][output.CatMismatch]
 
-			// --- Parallel pass (throughput measurement) ---
 			parDuration := benchmarkParallel(t, mafFile, ann, runtime.NumCPU())
 
 			seqVPS := float64(total) / seqDuration.Seconds()
@@ -197,9 +248,7 @@ func TestValidationBenchmark(t *testing.T) {
 		})
 	}
 
-	// Write markdown report
-	reportPath := filepath.Join(tcgaDir, "validation_report.md")
-	writeReport(t, reportPath, results, c.TranscriptCount(), cacheDuration, loadSource, cgl)
+	return results
 }
 
 // studyName extracts the study name from a MAF file path.
@@ -266,12 +315,13 @@ func benchmarkParallel(t *testing.T, mafFile string, ann *annotate.Annotator, wo
 }
 
 // writeReport generates a markdown validation report.
-func writeReport(t *testing.T, path string, results []studyResult, transcriptCount int, cacheDuration time.Duration, loadSource string, cgl oncokb.CancerGeneList) {
+func writeReport(t *testing.T, path string, results []studyResult, transcriptCount int, cacheDuration time.Duration, loadSource string, cgl oncokb.CancerGeneList, assembly string) {
 	t.Helper()
 
 	var sb strings.Builder
-	sb.WriteString("# TCGA Validation Report\n\n")
+	sb.WriteString(fmt.Sprintf("# %s Validation Report\n\n", assembly))
 	sb.WriteString(fmt.Sprintf("Generated: %s  \n", time.Now().UTC().Format("2006-01-02 15:04 UTC")))
+	sb.WriteString(fmt.Sprintf("Assembly: %s  \n", assembly))
 	sb.WriteString(fmt.Sprintf("GENCODE transcripts: %d (loaded from %s in %s)  \n", transcriptCount, loadSource, cacheDuration.Round(time.Millisecond)))
 	sb.WriteString(fmt.Sprintf("Workers: %d (GOMAXPROCS)\n\n", runtime.NumCPU()))
 
@@ -459,6 +509,277 @@ func writeReport(t *testing.T, path string, results []studyResult, transcriptCou
 	t.Logf("report written to %s", path)
 }
 
+// reportMeta holds metadata for JSON report generation.
+type reportMeta struct {
+	Assembly        string
+	TranscriptCount int
+	CacheDuration   time.Duration
+	LoadSource      string
+}
+
+// findDocsDataPath locates the docs/data directory relative to the test file
+// and returns the full path for the given filename.
+func findDocsDataPath(t *testing.T, filename string) string {
+	t.Helper()
+	for _, rel := range []string{
+		filepath.Join("docs", "data"),
+		filepath.Join("..", "..", "docs", "data"),
+	} {
+		if info, err := os.Stat(rel); err == nil && info.IsDir() {
+			return filepath.Join(rel, filename)
+		}
+	}
+	t.Fatalf("docs/data directory not found")
+	return ""
+}
+
+// reportTable is a generic table structure for JSON output.
+type reportTable struct {
+	Columns []string        `json:"columns"`
+	Align   []string        `json:"align"`
+	Rows    [][]interface{} `json:"rows"`
+	Totals  []interface{}   `json:"totals,omitempty"`
+}
+
+// reportJSON is the top-level JSON structure for validation reports.
+type reportJSON struct {
+	Assembly           string                  `json:"assembly"`
+	Generated          string                  `json:"generated"`
+	Transcripts        int                     `json:"transcripts"`
+	LoadSource         string                  `json:"load_source"`
+	LoadDuration       string                  `json:"load_duration"`
+	Workers            int                     `json:"workers"`
+	MatchRates         reportTable             `json:"match_rates"`
+	CategoryBreakdowns map[string]reportTable   `json:"category_breakdowns"`
+	CancerGenes        *reportCancerGenes      `json:"cancer_genes,omitempty"`
+	Performance        reportTable             `json:"performance"`
+}
+
+type reportCancerGenes struct {
+	TotalGenes          int             `json:"total_genes"`
+	GenesWithMismatches int             `json:"genes_with_mismatches"`
+	Columns             []string        `json:"columns,omitempty"`
+	Rows                [][]interface{} `json:"rows,omitempty"`
+}
+
+// writeReportJSON generates a JSON validation report for Hugo docs.
+func writeReportJSON(t *testing.T, path string, results []studyResult, meta reportMeta, cgl oncokb.CancerGeneList) {
+	t.Helper()
+
+	report := reportJSON{
+		Assembly:     meta.Assembly,
+		Generated:    time.Now().UTC().Format("2006-01-02 15:04 UTC"),
+		Transcripts:  meta.TranscriptCount,
+		LoadSource:   meta.LoadSource,
+		LoadDuration: meta.CacheDuration.Round(time.Millisecond).String(),
+		Workers:      runtime.NumCPU(),
+	}
+
+	// Match rates table
+	report.MatchRates = buildMatchRatesTable(results)
+
+	// Category breakdowns
+	report.CategoryBreakdowns = buildCategoryBreakdowns(results)
+
+	// Cancer genes
+	if cgl != nil {
+		report.CancerGenes = buildCancerGenes(results)
+	}
+
+	// Performance
+	report.Performance = buildPerformanceTable(results)
+
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal JSON report: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("write JSON report: %v", err)
+	}
+	t.Logf("JSON report written to %s", path)
+}
+
+func buildMatchRatesTable(results []studyResult) reportTable {
+	columns := []string{"Study", "Variants", "Conseq Match", "Conseq Mismatch", "Conseq Rate", "HGVSp Match", "HGVSp Mismatch", "HGVSp Rate", "HGVSc Match", "HGVSc Mismatch", "HGVSc Rate"}
+	align := []string{"left", "right", "right", "right", "right", "right", "right", "right", "right", "right", "right"}
+
+	var rows [][]interface{}
+	var totV, totCM, totCX, totPM, totPX, totHM, totHX int
+	for _, r := range results {
+		hgvspMatch := r.categoryCounts["HGVSp_Short"][output.CatMatch]
+		hgvspMismatch := r.categoryCounts["HGVSp_Short"][output.CatMismatch]
+		hgvscMatch := r.categoryCounts["HGVSc"][output.CatMatch]
+		hgvscMismatch := r.categoryCounts["HGVSc"][output.CatMismatch]
+		conseqRate := fmt.Sprintf("%.1f%%", float64(r.conseqMatch)/float64(r.variants)*100)
+		hgvspRate := fmt.Sprintf("%.1f%%", float64(hgvspMatch)/float64(r.variants)*100)
+		hgvscRate := fmt.Sprintf("%.1f%%", float64(hgvscMatch)/float64(r.variants)*100)
+
+		rows = append(rows, []interface{}{
+			r.name, r.variants,
+			r.conseqMatch, r.conseqMismatch, conseqRate,
+			hgvspMatch, hgvspMismatch, hgvspRate,
+			hgvscMatch, hgvscMismatch, hgvscRate,
+		})
+		totV += r.variants
+		totCM += r.conseqMatch
+		totCX += r.conseqMismatch
+		totPM += hgvspMatch
+		totPX += hgvspMismatch
+		totHM += hgvscMatch
+		totHX += hgvscMismatch
+	}
+	totals := []interface{}{
+		"Total", totV,
+		totCM, totCX, fmt.Sprintf("%.1f%%", float64(totCM)/float64(totV)*100),
+		totPM, totPX, fmt.Sprintf("%.1f%%", float64(totPM)/float64(totV)*100),
+		totHM, totHX, fmt.Sprintf("%.1f%%", float64(totHM)/float64(totV)*100),
+	}
+
+	return reportTable{Columns: columns, Align: align, Rows: rows, Totals: totals}
+}
+
+func buildCategoryBreakdowns(results []studyResult) map[string]reportTable {
+	breakdowns := make(map[string]reportTable)
+	colOrder := []string{"Consequence", "HGVSp_Short", "HGVSc"}
+	colNames := map[string]string{
+		"Consequence": "Consequence",
+		"HGVSp_Short": "HGVSp",
+		"HGVSc":       "HGVSc",
+	}
+
+	for _, col := range colOrder {
+		allCats := make(map[output.Category]bool)
+		for _, r := range results {
+			for cat := range r.categoryCounts[col] {
+				allCats[cat] = true
+			}
+		}
+		var catList []output.Category
+		for cat := range allCats {
+			catList = append(catList, cat)
+		}
+		sort.Slice(catList, func(i, j int) bool { return catList[i] < catList[j] })
+
+		columns := []string{"Study"}
+		align := []string{"left"}
+		for _, cat := range catList {
+			columns = append(columns, string(cat))
+			align = append(align, "right")
+		}
+
+		var rows [][]interface{}
+		totals := make([]int, len(catList))
+		for _, r := range results {
+			row := []interface{}{r.name}
+			for i, cat := range catList {
+				count := r.categoryCounts[col][cat]
+				totals[i] += count
+				row = append(row, count)
+			}
+			rows = append(rows, row)
+		}
+
+		totalRow := []interface{}{"Total"}
+		for _, t := range totals {
+			totalRow = append(totalRow, t)
+		}
+
+		breakdowns[colNames[col]] = reportTable{
+			Columns: columns,
+			Align:   align,
+			Rows:    rows,
+			Totals:  totalRow,
+		}
+	}
+	return breakdowns
+}
+
+func buildCancerGenes(results []studyResult) *reportCancerGenes {
+	aggGeneMismatches := make(map[string]map[string]int)
+	aggGeneTotal := make(map[string]int)
+	for _, r := range results {
+		for gene, counts := range r.geneMismatches {
+			if aggGeneMismatches[gene] == nil {
+				aggGeneMismatches[gene] = make(map[string]int)
+			}
+			for col, n := range counts {
+				aggGeneMismatches[gene][col] += n
+			}
+		}
+		for gene, n := range r.geneTotal {
+			aggGeneTotal[gene] += n
+		}
+	}
+
+	cg := &reportCancerGenes{
+		TotalGenes:          len(aggGeneTotal),
+		GenesWithMismatches: len(aggGeneMismatches),
+	}
+
+	if len(aggGeneMismatches) > 0 {
+		cg.Columns = []string{"Gene", "Variants", "Conseq Mismatches", "HGVSp Mismatches", "HGVSc Mismatches"}
+
+		type geneEntry struct {
+			gene  string
+			total int
+		}
+		var genes []geneEntry
+		for gene, counts := range aggGeneMismatches {
+			total := counts["Consequence"] + counts["HGVSp_Short"] + counts["HGVSc"]
+			genes = append(genes, geneEntry{gene, total})
+		}
+		sort.Slice(genes, func(i, j int) bool {
+			if genes[i].total != genes[j].total {
+				return genes[i].total > genes[j].total
+			}
+			return genes[i].gene < genes[j].gene
+		})
+
+		for _, ge := range genes {
+			counts := aggGeneMismatches[ge.gene]
+			cg.Rows = append(cg.Rows, []interface{}{
+				ge.gene, aggGeneTotal[ge.gene],
+				counts["Consequence"], counts["HGVSp_Short"], counts["HGVSc"],
+			})
+		}
+	}
+	return cg
+}
+
+func buildPerformanceTable(results []studyResult) reportTable {
+	columns := []string{"Study", "Variants", "Sequential", "Seq v/s", "Parallel", "Par v/s", "Speedup"}
+	align := []string{"left", "right", "right", "right", "right", "right", "right"}
+
+	var rows [][]interface{}
+	var totV int
+	var totSeq, totPar time.Duration
+	for _, r := range results {
+		seqVPS := float64(r.variants) / r.seqDuration.Seconds()
+		parVPS := float64(r.variants) / r.parDuration.Seconds()
+		speedup := r.seqDuration.Seconds() / r.parDuration.Seconds()
+		rows = append(rows, []interface{}{
+			r.name, r.variants,
+			r.seqDuration.Round(time.Millisecond).String(), fmt.Sprintf("%.0f", seqVPS),
+			r.parDuration.Round(time.Millisecond).String(), fmt.Sprintf("%.0f", parVPS),
+			fmt.Sprintf("%.2fx", speedup),
+		})
+		totV += r.variants
+		totSeq += r.seqDuration
+		totPar += r.parDuration
+	}
+	totSeqVPS := float64(totV) / totSeq.Seconds()
+	totParVPS := float64(totV) / totPar.Seconds()
+	totSpeedup := totSeq.Seconds() / totPar.Seconds()
+	totals := []interface{}{
+		"Total", totV,
+		totSeq.Round(time.Millisecond).String(), fmt.Sprintf("%.0f", totSeqVPS),
+		totPar.Round(time.Millisecond).String(), fmt.Sprintf("%.0f", totParVPS),
+		fmt.Sprintf("%.2fx", totSpeedup),
+	}
+
+	return reportTable{Columns: columns, Align: align, Rows: rows, Totals: totals}
+}
+
 // loadCancerGeneList attempts to load the OncoKB cancer gene list from the repo root.
 func loadCancerGeneList(t *testing.T) oncokb.CancerGeneList {
 	t.Helper()
@@ -480,38 +801,48 @@ func loadCancerGeneList(t *testing.T) oncokb.CancerGeneList {
 	return nil
 }
 
-// findTCGADir locates the testdata/tcga directory.
-func findTCGADir(t *testing.T) string {
+// findStudyDir locates a testdata subdirectory (e.g. "tcga", "grch37").
+func findStudyDir(t *testing.T, subdir string) string {
 	t.Helper()
 	for _, p := range []string{
-		filepath.Join("testdata", "tcga"),
-		filepath.Join("..", "..", "testdata", "tcga"),
+		filepath.Join("testdata", subdir),
+		filepath.Join("..", "..", "testdata", subdir),
 	} {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	t.Fatal("testdata/tcga directory not found")
+	t.Fatalf("testdata/%s directory not found", subdir)
 	return ""
 }
 
-// findGENCODEFiles locates GENCODE cache files for GRCh38.
-func findGENCODEFiles(t *testing.T) (gtfPath, fastaPath, canonicalPath string) {
+// findGENCODEFiles locates GENCODE cache files for the given assembly.
+// Uses assembly-specific glob patterns: gencode.v*lift37.* for GRCh37.
+func findGENCODEFiles(t *testing.T, assembly string) (gtfPath, fastaPath, canonicalPath string) {
 	t.Helper()
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("get home dir: %v", err)
 	}
-	dir := filepath.Join(home, ".vibe-vep", "grch38")
+	dir := filepath.Join(home, ".vibe-vep", strings.ToLower(assembly))
 
-	matches, err := filepath.Glob(filepath.Join(dir, "gencode.v*.annotation.gtf.gz"))
+	var gtfPattern, fastaPattern string
+	if strings.EqualFold(assembly, "GRCh37") {
+		gtfPattern = "gencode.v*lift37.annotation.gtf.gz"
+		fastaPattern = "gencode.v*lift37.pc_transcripts.fa.gz"
+	} else {
+		gtfPattern = "gencode.v*.annotation.gtf.gz"
+		fastaPattern = "gencode.v*.pc_transcripts.fa.gz"
+	}
+
+	matches, err := filepath.Glob(filepath.Join(dir, gtfPattern))
 	if err != nil || len(matches) == 0 {
-		t.Fatalf("GENCODE GTF not found in %s — run: vibe-vep download", dir)
+		t.Skipf("GENCODE GTF not found in %s — run: vibe-vep download --assembly %s", dir, assembly)
 	}
 	gtfPath = matches[0]
 
-	matches, err = filepath.Glob(filepath.Join(dir, "gencode.v*.pc_transcripts.fa.gz"))
+	matches, err = filepath.Glob(filepath.Join(dir, fastaPattern))
 	if err == nil && len(matches) > 0 {
 		fastaPath = matches[0]
 	}

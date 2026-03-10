@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export
+.PHONY: build test lint clean install download-testdata download-tcga download-grch37 docs docs-build wasm wasm-exec parquet-export
 
 # Binary name
 BINARY=vibe-vep
@@ -32,9 +32,16 @@ fmt:
 	gofmt -s -w .
 	goimports -w .
 
-# Download TCGA test data for validation (~1.6GB)
-download-testdata:
+# Download all test data for validation
+download-testdata: download-tcga download-grch37
+
+# Download TCGA test data for GRCh38 validation (~1.6GB)
+download-tcga:
 	./scripts/download_tcga.sh
+
+# Download GRCh37 test data for validation
+download-grch37:
+	./scripts/download_grch37.sh
 
 # Download dependencies
 deps:
