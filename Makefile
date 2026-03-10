@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export
+.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export cudaops build-cuda bench-cuda
 
 # Binary name
 BINARY=vibe-vep
@@ -46,6 +46,38 @@ INPUT ?= testdata/tcga/chol_tcga_gdc_data_mutations.txt
 OUTPUT ?= annotations.parquet
 parquet-export: build
 	./$(BINARY) export parquet --canonical --pick -o $(OUTPUT) $(INPUT)
+
+# ---- GPU / CUDA targets ----
+
+CUDA_ARCH ?= sm_80
+CUDA_HOME ?= /usr/local/cuda
+
+# Compile the CUDA shared library (requires nvcc).
+cudaops:
+	nvcc -O3 -arch=$(CUDA_ARCH) --compiler-options -fPIC \
+		-I$(CUDA_HOME)/include \
+		-shared -o internal/cudaops/libcudaops.so \
+		internal/cudaops/codon_cuda.cu \
+		-L$(CUDA_HOME)/lib64 -lcudart
+
+# Build the main binary with CUDA support (requires cudaops target first).
+build-cuda: cudaops
+	CGO_ENABLED=1 \
+		CGO_CFLAGS="-I$(CUDA_HOME)/include" \
+		CGO_LDFLAGS="-L$(CURDIR)/internal/cudaops -lcudaops -Wl,-rpath,$(CURDIR)/internal/cudaops -L$(CUDA_HOME)/lib64 -lcudart" \
+		go build -tags cuda $(LDFLAGS) -o $(BINARY)-cuda ./cmd/vibe-vep
+
+# Run the benchmark suite with and without CUDA.
+bench-cuda: cudaops
+	@echo "=== CPU fallback benchmarks ==="
+	GOTOOLCHAIN=go1.24.0 go test ./internal/cudaops/ -bench=. -benchmem -benchtime=3s
+	@echo ""
+	@echo "=== CUDA GPU benchmarks ==="
+	CGO_ENABLED=1 \
+		CGO_CFLAGS="-I$(CUDA_HOME)/include" \
+		CGO_LDFLAGS="-L$(CURDIR)/internal/cudaops -lcudaops -Wl,-rpath,$(CURDIR)/internal/cudaops -L$(CUDA_HOME)/lib64 -lcudart" \
+		LD_LIBRARY_PATH=$(CURDIR)/internal/cudaops:$(CUDA_HOME)/lib64:$(LD_LIBRARY_PATH) \
+		GOTOOLCHAIN=go1.24.0 go test -tags cuda ./internal/cudaops/ -bench=. -benchmem -benchtime=3s
 
 # Build WASM binary for interactive tutorial
 wasm:
