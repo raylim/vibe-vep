@@ -46,5 +46,10 @@ dist/
 # TCGA test data (large MAF files, download with: make download-testdata)
 testdata/tcga/*.txt
 
+# Generated annotation VCFs (large, reproducible via scripts/run_snpeff.sh and scripts/run_vep.sh)
+testdata/tcga/snpeff/
+testdata/tcga/vep/
+testdata/tcga/snpeff_benchmark_report.md
+
 # Git worktrees
 .worktrees/
