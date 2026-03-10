@@ -31,6 +31,7 @@ making cross-tool HGVSp comparison directly meaningful.
 |------|--------------------|-------------------|---------------|
 | vibe-vep | 90.0% | 97.7% | 1306 |
 | snpEff GRCh38.115 | 42.7% | 48.2% | 241 |
+| Ensembl VEP v115 | 81.2% | 97.8% | 249 |
 
 ### Protein HGVS Match (MANE Select transcripts only, n=139128)
 
@@ -41,6 +42,7 @@ _the same transcript, so protein notation differences reflect real errors._
 |------|-------------|
 | vibe-vep | 90.1% |
 | snpEff GRCh38.115 | 42.7% |
+| Ensembl VEP v115 | 81.3% |
 
 ### Consequence Class Match
 
@@ -51,13 +53,14 @@ _Ter/\* suffix → `stop_gained`, `fs` → `frameshift_variant`._
 |------|-------------------|
 | vibe-vep | 97.6% |
 | snpEff GRCh38.115 | 98.5% |
+| Ensembl VEP v115 | 98.4% |
 
 ## Performance
 
 | Tool | Variants | Time | Rate |
 |------|----------|------|------|
-| vibe-vep | 139235 | 5.8s | 23867 v/s |
-_Cache load: 2.5s from duckdb cache_
+| vibe-vep | 139235 | 5.1s | 27067 v/s |
+_Cache load: 2.0s from duckdb cache_
 
 ## Interpretation
 
