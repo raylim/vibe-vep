@@ -18,10 +18,10 @@ import (
 
 // GENCODE FTP URLs
 const (
-	gencodeBaseURL = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_46"
+	gencodeBaseURL = "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49"
 
 	// GencodeVersion is the GENCODE release version used for annotations.
-	GencodeVersion = "v46"
+	GencodeVersion = "v49"
 )
 
 // getGENCODEURLs returns the GTF and FASTA URLs for the given assembly.

@@ -643,12 +643,12 @@ func writeSnpEffReport(
 
 	if hasVEP {
 		sb.WriteString("## Methodology Notes\n\n")
-		sb.WriteString("The three tools use **different gene model versions**, which affects comparability:\n\n")
-		sb.WriteString("| Tool | Gene model | Approx. Ensembl release |\n")
-		sb.WriteString("|------|-----------|------------------------|\n")
+		sb.WriteString("All three tools use **Ensembl 115 gene models** for this benchmark run:\n\n")
+		sb.WriteString("| Tool | Gene model | Ensembl release |\n")
+		sb.WriteString("|------|-----------|----------------|\n")
 		sb.WriteString("| Ground truth (GDC MAF) | Ensembl VEP + MSK isoform overrides | ~Ensembl 92–99 era |\n")
-		sb.WriteString("| snpEff | GRCh38.99 | Ensembl 99 |\n")
-		sb.WriteString("| vibe-vep | GENCODE v46 | Ensembl 110 |\n")
+		sb.WriteString("| snpEff | GRCh38.115 | Ensembl 115 |\n")
+		sb.WriteString("| vibe-vep | GENCODE v49 | Ensembl 115 |\n")
 		sb.WriteString("| Ensembl VEP (this run) | VEP v115 cache | Ensembl 115 |\n\n")
 		sb.WriteString("**Important caveats:**\n\n")
 		sb.WriteString("1. **Ground truth is VEP-derived**: The TCGA GDC MAF files were themselves annotated with " +
@@ -657,12 +657,13 @@ func writeSnpEffReport(
 			"identical SO term vocabularies and transcript selection logic.\n\n")
 		sb.WriteString("2. **GDC uses MSK isoform overrides** (`#isoform: mskcc` header): The GDC applies " +
 			"cancer-relevant isoform prioritization via genome-nexus, not purely Ensembl canonical isoforms. " +
-			"Neither our VEP run nor snpEff uses these overrides. vibe-vep's higher HGVSp match rate (94.6% vs " +
-			"VEP's ~69%) reflects that vibe-vep's transcript prioritization is more compatible with MSK/GDC " +
+			"Neither our VEP run nor snpEff uses these overrides. vibe-vep's higher HGVSp match rate (~94% vs " +
+			"VEP's ~70%) reflects that vibe-vep's transcript prioritization is more compatible with MSK/GDC " +
 			"isoform choices.\n\n")
-		sb.WriteString("3. **Version drift**: VEP v115 uses gene models 16+ Ensembl releases newer than the GDC " +
-			"ground truth era. Some transcripts have changed exon structure or been retired between versions, " +
-			"which explains VEP's lower HGVSp scores despite using the same annotation engine.\n\n")
+		sb.WriteString("3. **Version drift vs ground truth**: All tools use Ensembl 115, which is 16+ releases " +
+			"newer than the GDC ground truth era (~Ensembl 92–99). Some transcripts have changed exon structure " +
+			"or been retired between versions. Despite using the same Ensembl 115 database as VEP, vibe-vep " +
+			"achieves higher HGVSp match rates due to its MSK-compatible transcript prioritization.\n\n")
 		sb.WriteString("**What this benchmark measures**: Compatibility with GDC/MSK clinical annotations, " +
 			"not absolute correctness against the genome. For clinical variant reporting workflows that produce " +
 			"or consume GDC-style MAF files, vibe-vep's annotations are most compatible.\n\n")

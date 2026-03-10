@@ -12,11 +12,13 @@
 #   - snpEff GRCh38 database (downloaded automatically on first run)
 #
 # Usage:
-#   scripts/run_snpeff.sh [--snpeff-jar PATH] [--db GENOME] [--threads N]
+#   scripts/run_snpeff.sh [--snpeff-jar PATH] [--db GENOME] [--data-dir DIR] [--config FILE] [--threads N]
 #
 # Options:
 #   --snpeff-jar PATH   Path to snpEff.jar  [default: ~/snpEff/snpEff.jar or $SNPEFF_JAR]
 #   --db GENOME         snpEff genome database  [default: GRCh38.99]
+#   --data-dir DIR      snpEff data directory containing genome databases  [default: snpEff built-in]
+#   --config FILE       Path to custom snpEff.config  [default: snpEff built-in]
 #   --threads N         Parallel jobs  [default: 4]
 #   --studies A,B,...   Comma-separated study names  [default: all TCGA studies]
 #   --force             Re-annotate even if output exists
@@ -26,8 +28,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TCGA_DIR="$REPO_ROOT/testdata/tcga"
 SNPEFF_DIR="$TCGA_DIR/snpeff"
 
-# Default snpEff genome database matching TCGA GDC (GRCh38 GENCODE).
-SNPEFF_DB="${SNPEFF_DB:-GRCh38.99}"
+# Default snpEff genome database (GRCh38 Ensembl 115, aligned with GENCODE v49 and VEP v115).
+SNPEFF_DB="${SNPEFF_DB:-GRCh38.115}"
+SNPEFF_DATA_DIR="${SNPEFF_DATA_DIR:-}"
+SNPEFF_CONFIG="${SNPEFF_CONFIG:-}"
 THREADS="${THREADS:-4}"
 FORCE=0
 
@@ -61,6 +65,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --snpeff-jar) SNPEFF_JAR="$2"; shift 2 ;;
     --db)         SNPEFF_DB="$2"; shift 2 ;;
+    --data-dir)   SNPEFF_DATA_DIR="$2"; shift 2 ;;
+    --config)     SNPEFF_CONFIG="$2"; shift 2 ;;
     --threads)    THREADS="$2"; shift 2 ;;
     --force)      FORCE=1; shift ;;
     --studies)    IFS=',' read -ra STUDIES <<< "$2"; shift 2 ;;
@@ -91,6 +97,8 @@ fi
 
 echo "snpEff JAR : $SNPEFF_JAR"
 echo "Database   : $SNPEFF_DB"
+echo "Data dir   : ${SNPEFF_DATA_DIR:-(default)}"
+echo "Config     : ${SNPEFF_CONFIG:-(default)}"
 echo "Output dir : $SNPEFF_DIR"
 echo "Threads    : $THREADS"
 echo ""
@@ -265,7 +273,17 @@ run_study() {
   python3 "$MAF2VCF_SCRIPT" "$maf_file" "$input_vcf"
 
   echo "[$study] Running snpEff..."
-  java -Xmx4g -jar "$SNPEFF_JAR" ann \
+  local config_arg=()
+  if [[ -n "${SNPEFF_CONFIG:-}" ]]; then
+    config_arg=(-config "$SNPEFF_CONFIG")
+  fi
+  local data_dir_arg=()
+  if [[ -n "${SNPEFF_DATA_DIR:-}" ]]; then
+    data_dir_arg=(-dataDir "$SNPEFF_DATA_DIR")
+  fi
+  java -Xmx12g -jar "$SNPEFF_JAR" ann \
+    "${config_arg[@]}" \
+    "${data_dir_arg[@]}" \
     -v \
     -noStats \
     -noLog \
@@ -279,7 +297,7 @@ run_study() {
 }
 
 export -f run_study
-export TCGA_DIR SNPEFF_DIR SNPEFF_JAR SNPEFF_DB MAF2VCF_SCRIPT FORCE
+export TCGA_DIR SNPEFF_DIR SNPEFF_JAR SNPEFF_DB SNPEFF_DATA_DIR SNPEFF_CONFIG MAF2VCF_SCRIPT FORCE
 
 if command -v parallel &>/dev/null && [[ "$THREADS" -gt 1 ]]; then
   printf '%s\n' "${STUDIES[@]}" | parallel -j "$THREADS" run_study {}
