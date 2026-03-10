@@ -15,9 +15,15 @@ import (
 )
 
 // Store provides point lookups against the unified genomic annotation SQLite database.
+// When an in-memory table is loaded (via LoadInMemTable), single-variant Lookup
+// calls are served from the hash table (~150 ns) instead of a SQLite prepared
+// statement (~3 µs).  BatchLookup is always served from the hash table when it
+// is available, or falls back to concurrent SQLite readers otherwise.
 type Store struct {
 	db       *sql.DB
 	lookupPS *sql.Stmt
+	inmem    *InMemTable // nil until LoadInMemTable is called
+	dbPath   string      // retained for LoadInMemTable
 }
 
 // Open opens an existing genomic annotation database and prepares the lookup statement.
@@ -35,11 +41,16 @@ func Open(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("prepare lookup: %w", err)
 	}
 
-	return &Store{db: db, lookupPS: ps}, nil
+	return &Store{db: db, lookupPS: ps, dbPath: dbPath}, nil
 }
 
 // Lookup performs a point lookup for a single variant.
+// When an in-memory table is loaded, the lookup is served from the hash table
+// (~150 ns) rather than a SQLite prepared statement (~3 µs).
 func (s *Store) Lookup(chrom string, pos int64, ref, alt string) (Result, bool) {
+	if s.inmem != nil {
+		return s.inmem.lookupInMemResult(chrom, pos, ref, alt)
+	}
 	var r Result
 	err := s.lookupPS.QueryRow(chrom, pos, ref, alt).Scan(
 		&r.AMScore, &r.AMClass, &r.CVClnSig, &r.CVClnRevStat, &r.CVClnDN,
@@ -53,6 +64,10 @@ func (s *Store) Lookup(chrom string, pos int64, ref, alt string) (Result, bool) 
 
 // Close closes the prepared statement and database.
 func (s *Store) Close() error {
+	if s.inmem != nil {
+		s.inmem.Free()
+		s.inmem = nil
+	}
 	if s.lookupPS != nil {
 		s.lookupPS.Close()
 	}

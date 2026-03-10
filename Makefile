@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export cudaops build-cuda bench-cuda
+.PHONY: build test lint clean install download-testdata docs docs-build wasm wasm-exec parquet-export cudaops build-cuda bench-cuda gpuhash build-gpuhash bench-gpuhash
 
 # Binary name
 BINARY=vibe-vep
@@ -78,6 +78,33 @@ bench-cuda: cudaops
 		CGO_LDFLAGS="-L$(CURDIR)/internal/cudaops -lcudaops -Wl,-rpath,$(CURDIR)/internal/cudaops -L$(CUDA_HOME)/lib64 -lcudart" \
 		LD_LIBRARY_PATH=$(CURDIR)/internal/cudaops:$(CUDA_HOME)/lib64:$(LD_LIBRARY_PATH) \
 		GOTOOLCHAIN=go1.24.0 go test -tags cuda ./internal/cudaops/ -bench=. -benchmem -benchtime=3s
+
+# Compile the gpuhash CUDA shared library (requires nvcc).
+gpuhash:
+	nvcc -O3 -arch=$(CUDA_ARCH) --compiler-options -fPIC \
+		-I$(CUDA_HOME)/include \
+		-shared -o internal/gpuhash/libgpuhash.so \
+		internal/gpuhash/gpuhash_cuda.cu \
+		-L$(CUDA_HOME)/lib64 -lcudart
+
+# Build the main binary with CUDA gpuhash support (requires gpuhash target first).
+build-gpuhash: gpuhash
+	CGO_ENABLED=1 \
+		CGO_CFLAGS="-I$(CUDA_HOME)/include" \
+		CGO_LDFLAGS="-L$(CURDIR)/internal/gpuhash -lgpuhash -Wl,-rpath,$(CURDIR)/internal/gpuhash -L$(CUDA_HOME)/lib64 -lcudart" \
+		go build -tags cuda $(LDFLAGS) -o $(BINARY)-gpuhash ./cmd/vibe-vep
+
+# Run gpuhash benchmarks with CPU fallback and CUDA paths.
+bench-gpuhash: gpuhash
+	@echo "=== gpuhash CPU fallback benchmarks ==="
+	GOTOOLCHAIN=go1.24.0 go test ./internal/gpuhash/ -bench=. -benchmem -benchtime=3s
+	@echo ""
+	@echo "=== gpuhash CUDA GPU benchmarks ==="
+	CGO_ENABLED=1 \
+		CGO_CFLAGS="-I$(CUDA_HOME)/include" \
+		CGO_LDFLAGS="-L$(CURDIR)/internal/gpuhash -lgpuhash -Wl,-rpath,$(CURDIR)/internal/gpuhash -L$(CUDA_HOME)/lib64 -lcudart" \
+		LD_LIBRARY_PATH=$(CURDIR)/internal/gpuhash:$(CUDA_HOME)/lib64:$(LD_LIBRARY_PATH) \
+		GOTOOLCHAIN=go1.24.0 go test -tags cuda ./internal/gpuhash/ -bench=. -benchmem -benchtime=3s
 
 # Build WASM binary for interactive tutorial
 wasm:

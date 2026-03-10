@@ -35,13 +35,14 @@ func newAnnotateCmd(verbose *bool) *cobra.Command {
 
 func newAnnotateMAFCmd(verbose *bool) *cobra.Command {
 	var (
-		assembly      string
-		outputFile    string
-		canonicalOnly bool
-		saveResults   bool
-		pick          bool
-		mostSevere    bool
-		replace       bool
+		assembly           string
+		outputFile         string
+		canonicalOnly      bool
+		saveResults        bool
+		preloadAnnotations bool
+		pick               bool
+		mostSevere         bool
+		replace            bool
 	)
 
 	cmd := &cobra.Command{
@@ -74,6 +75,7 @@ Transcript_ID, HGVSc, HGVSp, HGVSp_Short) are overwritten in-place.`,
 				viper.GetString("output"),
 				viper.GetBool("canonical"),
 				viper.GetBool("save-results"),
+				viper.GetBool("preload-annotations"),
 				viper.GetBool("no-cache"),
 				viper.GetBool("clear-cache"),
 				viper.GetBool("most-severe"),
@@ -86,6 +88,7 @@ Transcript_ID, HGVSc, HGVSp, HGVSp_Short) are overwritten in-place.`,
 	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
 	cmd.Flags().BoolVar(&canonicalOnly, "canonical", false, "Only report canonical transcript annotations")
 	cmd.Flags().BoolVar(&saveResults, "save-results", false, "Save annotation results to DuckDB for later lookup")
+	cmd.Flags().BoolVar(&preloadAnnotations, "preload-annotations", false, "Load genomic index into memory for faster batch lookups (~3 GB, ~45 s startup)")
 	cmd.Flags().BoolVar(&pick, "pick", false, "One annotation per variant (best transcript)")
 	cmd.Flags().BoolVar(&mostSevere, "most-severe", false, "One annotation per variant (highest impact)")
 	cmd.Flags().BoolVar(&replace, "replace", false, "Overwrite core MAF columns in-place instead of appending vibe.* columns")
@@ -96,12 +99,13 @@ Transcript_ID, HGVSc, HGVSp, HGVSp_Short) are overwritten in-place.`,
 
 func newAnnotateVCFCmd(verbose *bool) *cobra.Command {
 	var (
-		assembly      string
-		outputFile    string
-		canonicalOnly bool
-		saveResults   bool
-		pick          bool
-		mostSevere    bool
+		assembly           string
+		outputFile         string
+		canonicalOnly      bool
+		saveResults        bool
+		preloadAnnotations bool
+		pick               bool
+		mostSevere         bool
 	)
 
 	cmd := &cobra.Command{
@@ -130,6 +134,7 @@ func newAnnotateVCFCmd(verbose *bool) *cobra.Command {
 				viper.GetString("output"),
 				viper.GetBool("canonical"),
 				viper.GetBool("save-results"),
+				viper.GetBool("preload-annotations"),
 				viper.GetBool("no-cache"),
 				viper.GetBool("clear-cache"),
 				viper.GetBool("pick"),
@@ -142,6 +147,7 @@ func newAnnotateVCFCmd(verbose *bool) *cobra.Command {
 	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
 	cmd.Flags().BoolVar(&canonicalOnly, "canonical", false, "Only report canonical transcript annotations")
 	cmd.Flags().BoolVar(&saveResults, "save-results", false, "Save annotation results to DuckDB for later lookup")
+	cmd.Flags().BoolVar(&preloadAnnotations, "preload-annotations", false, "Load genomic index into memory for faster batch lookups (~3 GB, ~45 s startup)")
 	cmd.Flags().BoolVar(&pick, "pick", false, "One annotation per variant (best transcript)")
 	cmd.Flags().BoolVar(&mostSevere, "most-severe", false, "One annotation per variant (highest impact)")
 	addCacheFlags(cmd)
@@ -194,7 +200,7 @@ Supported formats:
 	return cmd
 }
 
-func runAnnotateMAF(logger *zap.Logger, inputPath, assembly, outputFile string, canonicalOnly, saveResults, noCache, clearCache, mostSevere, replace bool) error {
+func runAnnotateMAF(logger *zap.Logger, inputPath, assembly, outputFile string, canonicalOnly, saveResults, preloadAnnotations, noCache, clearCache, mostSevere, replace bool) error {
 	parser, err := maf.NewParser(inputPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -212,6 +218,12 @@ func runAnnotateMAF(logger *zap.Logger, inputPath, assembly, outputFile string, 
 		defer cr.store.Close()
 	}
 	defer cr.closeSources()
+
+	if preloadAnnotations {
+		if err := preloadSources(logger, cr.sources); err != nil {
+			logger.Warn("preload-annotations failed, continuing with SQLite lookups", zap.Error(err))
+		}
+	}
 
 	ann := annotate.NewAnnotator(cr.cache)
 	ann.SetCanonicalOnly(canonicalOnly)
@@ -252,7 +264,7 @@ func runAnnotateMAF(logger *zap.Logger, inputPath, assembly, outputFile string, 
 	return nil
 }
 
-func runAnnotateVCF(logger *zap.Logger, inputPath, assembly, outputFile string, canonicalOnly, saveResults, noCache, clearCache, pick, mostSevere bool) error {
+func runAnnotateVCF(logger *zap.Logger, inputPath, assembly, outputFile string, canonicalOnly, saveResults, preloadAnnotations, noCache, clearCache, pick, mostSevere bool) error {
 	parser, err := vcf.NewParser(inputPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -270,6 +282,12 @@ func runAnnotateVCF(logger *zap.Logger, inputPath, assembly, outputFile string, 
 		defer cr.store.Close()
 	}
 	defer cr.closeSources()
+
+	if preloadAnnotations {
+		if err := preloadSources(logger, cr.sources); err != nil {
+			logger.Warn("preload-annotations failed, continuing with SQLite lookups", zap.Error(err))
+		}
+	}
 
 	ann := annotate.NewAnnotator(cr.cache)
 	ann.SetCanonicalOnly(canonicalOnly)

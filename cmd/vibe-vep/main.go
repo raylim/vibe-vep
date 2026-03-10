@@ -171,6 +171,24 @@ func (cr *cacheResult) closeSources() {
 	}
 }
 
+// preloadSources calls Preload on any GenomicSource in the slice, loading the
+// genomic index into memory.  Returns the first error encountered.
+func preloadSources(logger *zap.Logger, sources []annotate.AnnotationSource) error {
+	for _, src := range sources {
+		gs, ok := src.(*genomicindex.GenomicSource)
+		if !ok {
+			continue
+		}
+		logger.Info("preloading genomic annotation index into memory (this may take ~45 s and ~3 GB RAM)...")
+		start := time.Now()
+		if err := gs.Preload(); err != nil {
+			return fmt.Errorf("preload genomic index: %w", err)
+		}
+		logger.Info("genomic index preloaded", zap.Duration("elapsed", time.Since(start)))
+	}
+	return nil
+}
+
 // normalizeAssembly validates and normalizes the assembly name.
 // Accepts GRCh37, GRCh38 (canonical) and common aliases hg19, hg38.
 func normalizeAssembly(assembly string) (string, error) {
