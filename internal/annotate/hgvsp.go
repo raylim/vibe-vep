@@ -135,6 +135,21 @@ func FormatHGVSp(result *ConsequenceResult) string {
 
 	case ConsequenceInframeInsertion:
 		n += copy(buf[n:], "p.")
+		if result.IsDelIns {
+			// Anchor codon(s) changed: p.AA1pos[_AA2endPos]delins[newAAs]
+			if result.RefAA != 0 {
+				n += copy(buf[n:], aaThree(result.RefAA))
+			}
+			n += putInt64(buf[n:], pos)
+			if result.ProteinEndPosition > result.ProteinPosition && result.EndAA != 0 {
+				buf[n] = '_'
+				n++
+				n += copy(buf[n:], aaThree(result.EndAA))
+				n += putInt64(buf[n:], result.ProteinEndPosition)
+			}
+			n += copy(buf[n:], "delins")
+			return string(buf[:n]) + formatAASequence(result.InsertedAAs)
+		}
 		if result.IsDup {
 			if result.RefAA != 0 {
 				n += copy(buf[n:], aaThree(result.RefAA))
@@ -155,6 +170,9 @@ func FormatHGVSp(result *ConsequenceResult) string {
 		n += putInt64(buf[n:], pos)
 		buf[n] = '_'
 		n++
+		if result.EndAA != 0 {
+			n += copy(buf[n:], aaThree(result.EndAA))
+		}
 		n += putInt64(buf[n:], pos+1)
 		n += copy(buf[n:], "ins")
 		return string(buf[:n]) + formatAASequence(result.InsertedAAs)
