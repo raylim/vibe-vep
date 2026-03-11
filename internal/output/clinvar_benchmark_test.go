@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -829,31 +830,66 @@ func writeClinVarReport(
 	fmt.Fprintf(w, "- **Stop-codon glyph**: snpEff uses `p.Gln55*`; ClinVar uses `p.Gln55Ter`.\n")
 	fmt.Fprintf(w, "  Normalized by replacing `*` with `Ter`.\n\n")
 	fmt.Fprintf(w, "### Breakdown by consequence class\n\n")
-	fmt.Fprintf(w, "**Missense** (n≈70k): vibe-vep 90.7%% leads all tools. snpEff 86.0%%, VEP 80.8%%.\n")
-	fmt.Fprintf(w, "All three reach ~97%% \"any\" match, confirming the differences are transcript-choice,\n")
-	fmt.Fprintf(w, "not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.\n\n")
-	fmt.Fprintf(w, "**Stop-gained** (n≈76k): All tools broadly comparable (77–83%% best).\n")
-	fmt.Fprintf(w, "\"Any\" match of 91–93%% indicates the remainder are transcript-drift cases.\n\n")
-	fmt.Fprintf(w, "**Frameshift** (n≈83k): vibe-vep 54.8%% lags snpEff 84.1%% and VEP 82.3%%.\n")
-	fmt.Fprintf(w, "snpEff and VEP both reach ~99.7%% \"any\" match, meaning the correct answer\n")
-	fmt.Fprintf(w, "exists in their multi-transcript output. vibe-vep's \"any\" is only 60.6%%,\n")
-	fmt.Fprintf(w, "indicating a genuine position-calculation gap for frameshifts — likely differing\n")
-	fmt.Fprintf(w, "3' normalization of deletions in homopolymer runs, leading to a different\n")
-	fmt.Fprintf(w, "\"first disrupted codon\" position.\n\n")
-	fmt.Fprintf(w, "**Inframe deletion** (n≈2k): vibe-vep 45.1%%, snpEff 82.1%%, VEP 78.3%%.\n")
-	fmt.Fprintf(w, "The high snpEff/VEP \"any\" (95%%) suggests the protein is correctly computed\n")
-	fmt.Fprintf(w, "but the position range notation (e.g., `p.Arg27_Ile28del`) is sensitive to\n")
-	fmt.Fprintf(w, "exact codon boundary choice under different normalization rules.\n\n")
-	fmt.Fprintf(w, "**Inframe insertion** (n≈750): vibe-vep 19.4%%, snpEff 60.6%%, VEP 71.5%%.\n")
-	fmt.Fprintf(w, "Largest relative gap. Insertion HGVSp notation is particularly complex\n")
-	fmt.Fprintf(w, "(position-range, dup vs ins disambiguation) and requires further investigation.\n\n")
-	fmt.Fprintf(w, "**Synonymous** (n≈815): vibe-vep 89.6%%, snpEff 0%%, VEP 0%%. snpEff and VEP\n")
-	fmt.Fprintf(w, "do not emit HGVSp for synonymous variants (silent change is not annotated in\n")
-	fmt.Fprintf(w, "the protein-change field); vibe-vep outputs `p.Arg273=` notation.\n\n")
-	fmt.Fprintf(w, "### Why VEP \"any\" match is much higher than \"best\" (96.2%% vs 79.8%%)\n\n")
+
+	classInfo := []struct {
+		id, label, approxN string
+	}{
+		{"missense_variant", "Missense", "≈70k"},
+		{"stop_gained", "Stop-gained", "≈76k"},
+		{"frameshift", "Frameshift", "≈83k"},
+		{"inframe_deletion", "Inframe deletion", "≈2k"},
+		{"inframe_insertion", "Inframe insertion", "≈750"},
+		{"synonymous", "Synonymous", "≈815"},
+	}
+
+	classSummary := map[string]string{
+		"missense_variant": "All three reach ~97% \"any\" match, confirming the differences are transcript-choice,\n" +
+			"not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.\n\n",
+		"stop_gained": "\"Any\" match of 91–93% indicates the remainder are transcript-drift cases.\n\n",
+		"frameshift": "snpEff and VEP both reach ~99.7% \"any\" match, meaning the correct answer\n" +
+			"exists in their multi-transcript output.\n\n",
+		"inframe_deletion": "The high snpEff/VEP \"any\" (~95%) suggests the protein is correctly computed\n" +
+			"but the position range notation (e.g., `p.Arg27_Ile28del`) is sensitive to\n" +
+			"exact codon boundary choice under different normalization rules.\n\n",
+		"inframe_insertion": "Insertion HGVSp notation is particularly complex\n" +
+			"(position-range, dup vs ins disambiguation) and requires further investigation.\n\n",
+		"synonymous": "snpEff and VEP do not emit HGVSp for synonymous variants (silent change is not\n" +
+			"annotated in the protein-change field); vibe-vep outputs `p.Arg273=` notation.\n\n",
+	}
+
+	for _, ci := range classInfo {
+		vc := vibe.byClass[ci.id]
+		sc := snpEff.byClass[ci.id]
+		vc2 := vep.byClass[ci.id]
+		vibeStr := "n/a"
+		if vc != nil {
+			vibeStr = pct(vc.exact, vc.total)
+		}
+		snpEffStr := "n/a"
+		if sc != nil && hasSnpEff {
+			snpEffStr = pct(sc.exact, sc.total)
+		}
+		vepStr := "n/a"
+		if vc2 != nil && hasVEP {
+			vepStr = pct(vc2.exact, vc2.total)
+		}
+		totalStr := ci.approxN
+		if vc != nil {
+			totalStr = "n=" + strconv.Itoa(vc.total) + " " + ci.approxN
+		}
+		fmt.Fprintf(w, "**%s** (%s): vibe-vep %s, snpEff %s, VEP %s.\n",
+			ci.label, totalStr, vibeStr, snpEffStr, vepStr)
+		if note, ok := classSummary[ci.id]; ok {
+			fmt.Fprint(w, note)
+		} else {
+			fmt.Fprintln(w)
+		}
+	}
+
+	fmt.Fprintf(w, "### Why VEP \"any\" match is much higher than \"best\"\n\n")
 	fmt.Fprintf(w, "VEP annotates all transcripts and the correct HGVSp exists in a non-primary\n")
-	fmt.Fprintf(w, "transcript for 16%% of variants. This is larger than snpEff (14%%) or vibe-vep\n")
-	fmt.Fprintf(w, "(7%%), suggesting VEP's primary-transcript ranking is less aligned with MANE\n")
+	fmt.Fprintf(w, "transcript for ~16%% of variants. This is larger than snpEff (~14%%) or vibe-vep\n")
+	fmt.Fprintf(w, "(~7%%), suggesting VEP's primary-transcript ranking is less aligned with MANE\n")
 	fmt.Fprintf(w, "than vibe-vep, but VEP's underlying nucleotide consequence prediction is\n")
 	fmt.Fprintf(w, "accurate for virtually all variants.\n")
 
@@ -884,6 +920,135 @@ func countSignificance(entries []clv.SummaryEntry) map[string]int {
 		}
 	}
 	return m
+}
+
+// TestFrameshiftPositionDebug samples frameshift variants where vibe-vep
+// disagrees with ClinVar to understand the position offset distribution.
+func TestFrameshiftPositionDebug(t *testing.T) {
+	summaryPath := filepath.Join(os.Getenv("HOME"), ".vibe-vep", "clinvar", "variant_summary.txt.gz")
+	if _, err := os.Stat(summaryPath); err != nil {
+		t.Skipf("ClinVar summary not found — run scripts/prepare_clinvar.sh first")
+	}
+	manePath := filepath.Join(os.Getenv("HOME"), ".vibe-vep", "clinvar", "MANE.GRCh38.v1.5.summary.txt.gz")
+	if _, err := os.Stat(manePath); err != nil {
+		t.Skipf("MANE file not found")
+	}
+	entries, err := clv.ParseSummaryFile(summaryPath)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	maneMap, err := mane.Load(manePath)
+	if err != nil {
+		t.Fatalf("load MANE: %v", err)
+	}
+	for i := range entries {
+		if maneMap.HasRefSeq(entries[i].Transcript) {
+			entries[i].IsMANE = true
+		}
+	}
+	entries = deduplicateEntries(entries)
+
+	c, _, _ := loadClinVarCache(t)
+	ann := annotate.NewAnnotator(c)
+
+	// reProteinPos extracts the numeric position from a normalised p.XxxNNNfs string.
+	rePos := regexp.MustCompile(`^([A-Z][a-z]{2})(\d+)fs`)
+
+	type mismatch struct {
+		chrom, ref, alt string
+		pos             int64
+		expected        string
+		got             string
+		offset          int
+	}
+	offsets := make(map[int]int) // offset → count
+	var samples []mismatch
+	const maxSamples = 20
+
+	for _, e := range entries {
+		if inferConsequenceClass(e.Protein) != "frameshift" {
+			continue
+		}
+		v := &vcf.Variant{Chrom: e.Chrom, Pos: e.Pos, Ref: e.Ref, Alt: e.Alt}
+		anns, _ := ann.Annotate(v)
+		best := output.PickBestAnnotation(anns)
+		if best == nil || best.HGVSp == "" {
+			continue
+		}
+		normExp := normalizeProteinStr(e.Protein)
+		normGot := normalizeProteinStr(best.HGVSp)
+		if normExp == normGot {
+			continue // match — skip
+		}
+		// Extract positions.
+		mExp := rePos.FindStringSubmatch(normExp)
+		mGot := rePos.FindStringSubmatch(normGot)
+		if mExp == nil || mGot == nil {
+			continue
+		}
+		var posExp, posGot int
+		fmt.Sscanf(mExp[2], "%d", &posExp)
+		fmt.Sscanf(mGot[2], "%d", &posGot)
+		offset := posGot - posExp
+		offsets[offset]++
+		if len(samples) < maxSamples {
+			samples = append(samples, mismatch{
+				chrom: e.Chrom, pos: e.Pos, ref: e.Ref, alt: e.Alt,
+				expected: normExp, got: normGot, offset: offset,
+			})
+		}
+	}
+
+	t.Logf("Frameshift position offset distribution (vibe-vep − ClinVar):")
+	// Print sorted offsets.
+	for off := -10; off <= 10; off++ {
+		if c := offsets[off]; c > 0 {
+			t.Logf("  offset %+d: %d variants", off, c)
+		}
+	}
+	// Print anything outside −10..+10.
+	var otherTotal int
+	for off, c := range offsets {
+		if off < -10 || off > 10 {
+			otherTotal += c
+		}
+	}
+	if otherTotal > 0 {
+		t.Logf("  offset >±10: %d variants", otherTotal)
+	}
+	t.Logf("Sample mismatches (first %d):", len(samples))
+	for _, m := range samples {
+		t.Logf("  %s:%d %s>%s  expected=%s  got=%s  (offset %+d)",
+			m.chrom, m.pos, m.ref, m.alt, m.expected, m.got, m.offset)
+	}
+}
+
+// TestFrameshiftSingleVariantDebug traces internal state for a known failing case.
+func TestFrameshiftSingleVariantDebug(t *testing.T) {
+	c, _, _ := loadClinVarCache(t)
+	ann := annotate.NewAnnotator(c)
+
+	// 2:29073314 AT>A  expected=Asn316fs  got=Val317fs
+	v := &vcf.Variant{Chrom: "2", Pos: 29073314, Ref: "AT", Alt: "A"}
+	anns, err := ann.Annotate(v)
+	if err != nil {
+		t.Fatalf("annotate: %v", err)
+	}
+	for _, a := range anns {
+		if a.HGVSp != "" {
+			tr := c.GetTranscript(a.TranscriptID)
+			strand := "unknown"
+			if tr != nil {
+				if tr.IsForwardStrand() {
+					strand = "+"
+				} else {
+					strand = "-"
+				}
+			}
+			t.Logf("transcript=%s strand=%s HGVSp=%s CDSpos=%d proteinPos=%d",
+				a.TranscriptID, strand, a.HGVSp, a.CDSPosition, a.ProteinPosition)
+		}
+	}
 }
 
 // readElapsedFile reads a sidecar *.elapsed file written by annotation scripts.

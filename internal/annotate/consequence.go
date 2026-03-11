@@ -520,22 +520,42 @@ func computeFrameshiftDetails(v *vcf.Variant, t *cache.Transcript, cdsPos int64)
 		alt = ReverseComplement(alt)
 	}
 
-	endIdx := cdsIdx + len(ref)
+	// For reverse-strand deletions the VCF anchor is the 3'-most (highest CDS
+	// index) base of the ref; the deleted bases lie at lower CDS positions
+	// (before the anchor in CDS space).  Shift startIdx left so that the
+	// mutant splice removes the correct bases.
+	//
+	// For forward-strand deletions (and all insertions / SNVs) the anchor is
+	// already at the 5' end of the ref, so startIdx == cdsIdx.
+	startIdx := cdsIdx
+	if t.IsReverseStrand() && len(ref) > len(alt) {
+		delLen := len(ref) - len(alt)
+		startIdx -= delLen
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	}
+
+	endIdx := startIdx + len(ref)
 	if endIdx > len(t.CDSSequence) {
 		endIdx = len(t.CDSSequence)
 	}
 
 	// Virtual mutant sequence: CDS prefix + alt + CDS suffix + 3'UTR.
 	// Uses splicedReader to avoid allocating the entire concatenated string.
-	mut := newSplicedReader(t.CDSSequence[:cdsIdx], alt, t.CDSSequence[endIdx:], t.UTR3Sequence)
+	mut := newSplicedReader(t.CDSSequence[:startIdx], alt, t.CDSSequence[endIdx:], t.UTR3Sequence)
 
-	// Scan from the codon containing the variant position forward,
-	// comparing each mutant codon against the original to find the first change.
-	codonStart := (cdsIdx / 3) * 3
+	// Scan from the codon containing the variant start to find the first
+	// codon that actually changes amino acid identity in the mutant.
+	// This naturally aligns with the HGVS 3' rule: in homopolymer runs, the
+	// anchor's codon may appear unchanged (repeat fills the deletion), so the
+	// scan advances to the first codon that is truly altered — corresponding
+	// to the HGVS-canonicalised (3'-shifted) variant position.
+	codonStart := (startIdx / 3) * 3
 	for i := codonStart; i+3 <= mut.Len(); i += 3 {
 		mutAA := TranslateCodon(mut.Codon(i))
 		if proteinPos == 0 {
-			// Still looking for the first changed codon
+			// Still looking for the first changed codon.
 			var origAA byte
 			if i+3 <= len(t.CDSSequence) {
 				origAA = TranslateCodon(t.CDSSequence[i : i+3])
@@ -554,7 +574,7 @@ func computeFrameshiftDetails(v *vcf.Variant, t *cache.Transcript, cdsPos int64)
 		}
 	}
 
-	// No stop found
+	// No stop found.
 	stopDist = 0
 	return
 }
