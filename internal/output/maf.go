@@ -99,6 +99,14 @@ func (m *MAFWriter) writeRowAppend(rawFields []string, ann *annotate.Annotation,
 
 	// Core prediction columns
 	if ann != nil {
+		canonMSK := ""
+		if ann.IsCanonicalMSK {
+			canonMSK = "YES"
+		}
+		canonEns := ""
+		if ann.IsCanonicalEnsembl {
+			canonEns = "YES"
+		}
 		row = append(row,
 			ann.GeneName,                              // vibe.hugo_symbol
 			ann.Consequence,                           // vibe.consequence
@@ -107,9 +115,11 @@ func (m *MAFWriter) writeRowAppend(rawFields []string, ann *annotate.Annotation,
 			ann.HGVSc,                                 // vibe.hgvsc
 			ann.HGVSp,                                 // vibe.hgvsp
 			HGVSpToShort(ann.HGVSp),                   // vibe.hgvsp_short
+			canonMSK,                                   // vibe.canonical_mskcc
+			canonEns,                                   // vibe.canonical_ensembl
 		)
 	} else {
-		row = append(row, "", "", "", "", "", "", "")
+		row = append(row, "", "", "", "", "", "", "", "", "")
 	}
 
 	// Annotation source columns

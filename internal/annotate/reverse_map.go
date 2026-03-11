@@ -21,7 +21,7 @@ func ReverseMapProteinChange(c *cache.Cache, geneName string, refAA byte, protPo
 	// Find canonical protein-coding transcript
 	var canonical *cache.Transcript
 	for _, t := range transcripts {
-		if t.IsCanonical && t.IsProteinCoding() {
+		if t.IsCanonicalMSK && t.IsProteinCoding() {
 			canonical = t
 			break
 		}
@@ -149,7 +149,7 @@ func ReverseMapHGVSc(c *cache.Cache, geneOrTranscript string, cdsChange string) 
 			return nil, fmt.Errorf("gene %q not found in transcript cache", geneOrTranscript)
 		}
 		for _, t := range transcripts {
-			if t.IsCanonical && t.IsProteinCoding() {
+			if t.IsCanonicalMSK && t.IsProteinCoding() {
 				transcript = t
 				break
 			}

@@ -102,7 +102,8 @@ func TestVCFWriter_SingleAnnotation(t *testing.T) {
 		ProteinPosition: 12,
 		AminoAcidChange: "G12C",
 		CodonChange:     "ggt/Tgt",
-		IsCanonical:     true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 	}
 
 	if err := w.Write(v, ann); err != nil {
@@ -190,7 +191,8 @@ func TestVCFWriter_MultipleAnnotations(t *testing.T) {
 		GeneName:     "KRAS",
 		TranscriptID: "ENST00000311936",
 		Biotype:      "protein_coding",
-		IsCanonical:  true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 	}
 	ann2 := &annotate.Annotation{
 		Allele:       "A",

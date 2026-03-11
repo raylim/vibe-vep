@@ -37,7 +37,7 @@ func TestWriteAndLookupVariants(t *testing.T) {
 				Consequence: "missense_variant", Impact: "MODERATE",
 				CDSPosition: 35, ProteinPosition: 12,
 				AminoAcidChange: "G/V", CodonChange: "gGt/gTt",
-				IsCanonical: true, Allele: "A",
+				IsCanonicalMSK: true, IsCanonicalEnsembl: true, Allele: "A",
 				Biotype: "protein_coding", ExonNumber: "2/6",
 				HGVSp: "p.Gly12Val", HGVSc: "c.35G>T",
 			},
@@ -48,7 +48,7 @@ func TestWriteAndLookupVariants(t *testing.T) {
 				TranscriptID: "ENST00000256078.10",
 				GeneName:     "KRAS", GeneID: "ENSG00000133703",
 				Consequence: "missense_variant", Impact: "MODERATE",
-				IsCanonical: false, Allele: "A",
+				Allele: "A",
 				Biotype: "protein_coding",
 			},
 		},
@@ -189,7 +189,7 @@ func TestTranscriptCacheWriteAndLoad(t *testing.T) {
 	c.AddTranscript(&cache.Transcript{
 		ID: "ENST00000311936.8", GeneID: "ENSG00000133703", GeneName: "KRAS",
 		Chrom: "12", Start: 25205246, End: 25250936, Strand: -1,
-		Biotype: "protein_coding", IsCanonical: true, IsMANESelect: true,
+		Biotype: "protein_coding", IsCanonicalMSK: true, IsCanonicalEnsembl: true, IsMANESelect: true,
 		CDSStart: 25209431, CDSEnd: 25245384,
 		CDSSequence: "ATGACTGAATATAAACTTGTGG", ProteinSequence: "MTEYK",
 		Exons: []cache.Exon{
@@ -221,7 +221,7 @@ func TestTranscriptCacheWriteAndLoad(t *testing.T) {
 	require.NotNil(t, kras)
 	assert.Equal(t, "KRAS", kras.GeneName)
 	assert.Equal(t, int8(-1), kras.Strand)
-	assert.True(t, kras.IsCanonical)
+	assert.True(t, kras.IsCanonicalMSK)
 	assert.True(t, kras.IsMANESelect)
 	assert.Equal(t, "ATGACTGAATATAAACTTGTGG", kras.CDSSequence)
 	assert.Equal(t, "MTEYK", kras.ProteinSequence)

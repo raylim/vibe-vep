@@ -21,7 +21,8 @@ type Transcript struct {
 	End             int64  // Transcript end (1-based, inclusive)
 	Strand          int8   // +1 or -1
 	Biotype         string // Transcript biotype
-	IsCanonical     bool   // Ensembl canonical flag
+	IsCanonicalMSK     bool // MSK canonical transcript
+	IsCanonicalEnsembl bool // Ensembl canonical transcript (from GTF tag)
 	IsMANESelect    bool   // MANE Select transcript
 	Exons           []Exon // Exons sorted ascending by genomic Start
 	CDSStart        int64  // CDS start (genomic, 1-based), 0 if non-coding

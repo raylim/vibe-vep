@@ -120,16 +120,18 @@ func (l *GTFLoader) parseGTF(reader io.Reader, filterChrom string) (map[string]*
 
 		switch feat.featureType {
 		case "transcript":
+			isEnsemblCanonical := feat.attributes["tag"] == "Ensembl_canonical" || strings.Contains(feat.attributes["tag"], "Ensembl_canonical")
 			t := &Transcript{
-				ID:          transcriptID,
-				GeneID:      stripVersion(feat.attributes["gene_id"]),
-				GeneName:    feat.attributes["gene_name"],
-				Chrom:       feat.chrom,
-				Start:       feat.start,
-				End:         feat.end,
-				Strand:      parseStrand(feat.strand),
-				Biotype:     feat.attributes["transcript_type"],
-				IsCanonical: feat.attributes["tag"] == "Ensembl_canonical" || strings.Contains(feat.attributes["tag"], "Ensembl_canonical"),
+				ID:                 transcriptID,
+				GeneID:             stripVersion(feat.attributes["gene_id"]),
+				GeneName:           feat.attributes["gene_name"],
+				Chrom:              feat.chrom,
+				Start:              feat.start,
+				End:                feat.end,
+				Strand:             parseStrand(feat.strand),
+				Biotype:            feat.attributes["transcript_type"],
+				IsCanonicalMSK:     isEnsemblCanonical, // default to GTF tag, overridden by biomart
+				IsCanonicalEnsembl: isEnsemblCanonical,
 			}
 			// Check for MANE Select tag
 			if strings.Contains(feat.attributes["tag"], "MANE_Select") {
@@ -347,11 +349,12 @@ func normalizeChrom(chrom string) string {
 
 // GENCODELoader combines GTF and FASTA loaders for complete annotation data.
 type GENCODELoader struct {
-	gtfPath            string
-	fastaPath          string
-	gtf                *GTFLoader
-	fasta              *FASTALoader
-	canonicalOverrides CanonicalOverrides
+	gtfPath                string
+	fastaPath              string
+	gtf                    *GTFLoader
+	fasta                  *FASTALoader
+	mskCanonicalOverrides  CanonicalOverrides
+	ensCanonicalOverrides  CanonicalOverrides
 }
 
 // NewGENCODELoader creates a loader for GENCODE GTF + FASTA files.
@@ -364,10 +367,10 @@ func NewGENCODELoader(gtfPath, fastaPath string) *GENCODELoader {
 }
 
 // SetCanonicalOverrides sets Genome Nexus canonical transcript overrides.
-// When applied, for each gene with an override, the matching transcript is marked
-// as canonical and other transcripts for that gene are unmarked.
-func (l *GENCODELoader) SetCanonicalOverrides(overrides CanonicalOverrides) {
-	l.canonicalOverrides = overrides
+// mskcc overrides apply to IsCanonicalMSK, ensembl overrides apply to IsCanonicalEnsembl.
+func (l *GENCODELoader) SetCanonicalOverrides(mskcc, ensembl CanonicalOverrides) {
+	l.mskCanonicalOverrides = mskcc
+	l.ensCanonicalOverrides = ensembl
 }
 
 // Load loads all transcripts and sequences into the cache.
@@ -378,7 +381,7 @@ func (l *GENCODELoader) Load(c *Cache) error {
 	}
 
 	// Apply canonical overrides if set
-	if len(l.canonicalOverrides) > 0 {
+	if len(l.mskCanonicalOverrides) > 0 || len(l.ensCanonicalOverrides) > 0 {
 		l.applyCanonicalOverrides(c)
 	}
 
@@ -408,6 +411,7 @@ func (l *GENCODELoader) Load(c *Cache) error {
 }
 
 // applyCanonicalOverrides applies Genome Nexus canonical transcript overrides.
+// MSK overrides apply to IsCanonicalMSK, Ensembl overrides apply to IsCanonicalEnsembl.
 func (l *GENCODELoader) applyCanonicalOverrides(c *Cache) {
 	// Group transcripts by gene name
 	geneTranscripts := make(map[string][]*Transcript)
@@ -419,14 +423,12 @@ func (l *GENCODELoader) applyCanonicalOverrides(c *Cache) {
 		}
 	}
 
-	// Apply overrides (canonical overrides use unversioned IDs)
-	for gene, canonicalID := range l.canonicalOverrides {
+	// Apply MSK overrides
+	for gene, canonicalID := range l.mskCanonicalOverrides {
 		transcripts, ok := geneTranscripts[gene]
 		if !ok {
 			continue
 		}
-
-		// Check if the canonical transcript exists for this gene
 		found := false
 		for _, t := range transcripts {
 			if stripVersion(t.ID) == canonicalID {
@@ -434,14 +436,32 @@ func (l *GENCODELoader) applyCanonicalOverrides(c *Cache) {
 				break
 			}
 		}
-
 		if !found {
 			continue
 		}
-
-		// Set the override: mark only the canonical transcript
 		for _, t := range transcripts {
-			t.IsCanonical = (stripVersion(t.ID) == canonicalID)
+			t.IsCanonicalMSK = (stripVersion(t.ID) == canonicalID)
+		}
+	}
+
+	// Apply Ensembl overrides
+	for gene, canonicalID := range l.ensCanonicalOverrides {
+		transcripts, ok := geneTranscripts[gene]
+		if !ok {
+			continue
+		}
+		found := false
+		for _, t := range transcripts {
+			if stripVersion(t.ID) == canonicalID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		for _, t := range transcripts {
+			t.IsCanonicalEnsembl = (stripVersion(t.ID) == canonicalID)
 		}
 	}
 }

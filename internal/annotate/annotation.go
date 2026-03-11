@@ -64,7 +64,8 @@ type Annotation struct {
 	ProteinPosition int64             // Amino acid position, 0 if not in CDS
 	AminoAcidChange string            // e.g., "G12C", empty if not missense
 	CodonChange     string            // e.g., "GGT/TGT", empty if not coding
-	IsCanonical     bool              // Annotation on canonical transcript
+	IsCanonicalMSK     bool // Annotation on MSK canonical transcript
+	IsCanonicalEnsembl bool // Annotation on Ensembl canonical transcript
 	Allele          string            // The alternate allele
 	Biotype         string            // Transcript biotype
 	ExonNumber      string            // Exon number (e.g., "2/5")

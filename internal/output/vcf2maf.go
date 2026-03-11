@@ -37,7 +37,8 @@ var vcf2mafColumns = []string{
 	"Consequence",
 	"IMPACT",
 	"BIOTYPE",
-	"CANONICAL",
+	"CANONICAL_MSK",
+	"CANONICAL_ENSEMBL",
 	"Protein_position",
 	"Amino_acids",
 	"Codons",
@@ -155,7 +156,12 @@ func (m *VCF2MAFWriter) WriteRow(v *vcf.Variant, ann *annotate.Annotation) error
 		writeField(ann.Consequence)         // Consequence
 		writeField(ann.Impact)              // IMPACT
 		writeField(ann.Biotype)             // BIOTYPE
-		if ann.IsCanonical {
+		if ann.IsCanonicalMSK {
+			writeField("YES")
+		} else {
+			writeField("")
+		}
+		if ann.IsCanonicalEnsembl {
 			writeField("YES")
 		} else {
 			writeField("")
@@ -168,7 +174,7 @@ func (m *VCF2MAFWriter) WriteRow(v *vcf.Variant, ann *annotate.Annotation) error
 		writeField(ann.AminoAcidChange) // Amino_acids
 		writeField(ann.CodonChange)     // Codons
 	} else {
-		for range 12 {
+		for range 13 {
 			writeField("")
 		}
 	}

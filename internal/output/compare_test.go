@@ -221,7 +221,7 @@ func TestPickBestAnnotation(t *testing.T) {
 			name: "prefer canonical",
 			anns: []*annotate.Annotation{
 				{TranscriptID: "T1", Impact: "HIGH", Biotype: "protein_coding"},
-				{TranscriptID: "T2", Impact: "MODERATE", Biotype: "protein_coding", IsCanonical: true},
+				{TranscriptID: "T2", Impact: "MODERATE", Biotype: "protein_coding", IsCanonicalMSK: true},
 			},
 			want: "T2",
 		},
@@ -277,7 +277,7 @@ func TestPickMostSevere(t *testing.T) {
 		{
 			name: "prefer highest impact",
 			anns: []*annotate.Annotation{
-				{TranscriptID: "T1", Impact: "MODERATE", Biotype: "protein_coding", IsCanonical: true},
+				{TranscriptID: "T1", Impact: "MODERATE", Biotype: "protein_coding", IsCanonicalMSK: true},
 				{TranscriptID: "T2", Impact: "HIGH", Biotype: "retained_intron"},
 			},
 			want: "T2",
@@ -286,7 +286,7 @@ func TestPickMostSevere(t *testing.T) {
 			name: "tie-break canonical",
 			anns: []*annotate.Annotation{
 				{TranscriptID: "T1", Impact: "HIGH", Biotype: "protein_coding"},
-				{TranscriptID: "T2", Impact: "HIGH", Biotype: "protein_coding", IsCanonical: true},
+				{TranscriptID: "T2", Impact: "HIGH", Biotype: "protein_coding", IsCanonicalMSK: true},
 			},
 			want: "T2",
 		},

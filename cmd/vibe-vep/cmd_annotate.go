@@ -433,7 +433,7 @@ func runAnnotateVariant(logger *zap.Logger, specInput, assembly, specType string
 			fmt.Fprintln(w, header)
 			for _, a := range anns {
 				canon := "no"
-				if a.IsCanonical {
+				if a.IsCanonicalMSK {
 					canon = "yes"
 				}
 				line := fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\t%s",
@@ -455,7 +455,7 @@ func runAnnotateVariant(logger *zap.Logger, specInput, assembly, specType string
 			fmt.Fprintln(w, "Gene\tTranscript\tCanon\tConsequence\tImpact\tHGVSc\tHGVSp")
 			for _, a := range anns {
 				canon := "no"
-				if a.IsCanonical {
+				if a.IsCanonicalMSK {
 					canon = "yes"
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
@@ -481,7 +481,7 @@ func runAnnotateVariant(logger *zap.Logger, specInput, assembly, specType string
 				fmt.Fprintln(pw, "Gene\tTranscript\tCanon\tConsequence\tImpact\tHGVSc\tHGVSp")
 				for _, a := range prev {
 					canon := "no"
-					if a.IsCanonical {
+					if a.IsCanonicalMSK {
 						canon = "yes"
 					}
 					fmt.Fprintf(pw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",

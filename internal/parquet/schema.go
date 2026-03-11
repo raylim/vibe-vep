@@ -27,7 +27,8 @@ type Row struct {
 	CodonChange     string `parquet:"codon_change,zstd"`
 
 	// Transcript details
-	IsCanonical  bool   `parquet:"is_canonical,zstd"`
+	IsCanonicalMSK     bool `parquet:"is_canonical_msk,zstd"`
+	IsCanonicalEnsembl bool `parquet:"is_canonical_ensembl,zstd"`
 	Allele       string `parquet:"allele,zstd"`
 	Biotype      string `parquet:"biotype,dict,zstd"`
 	ExonNumber   string `parquet:"exon_number,zstd"`

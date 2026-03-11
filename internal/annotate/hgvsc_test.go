@@ -464,7 +464,8 @@ func createForwardTranscript() *cache.Transcript {
 		End:         1200,
 		Strand:      1,
 		Biotype:     "protein_coding",
-		IsCanonical: true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 		CDSStart:    1000,
 		CDSEnd:      1180,
 		Exons: []cache.Exon{

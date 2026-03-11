@@ -8,7 +8,8 @@
     "End": 55203076,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -237,7 +238,8 @@
     "End": 55206016,
     "Strand": 1,
     "Biotype": "retained_intron",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -290,7 +292,8 @@
     "End": 55156951,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -391,7 +394,8 @@
     "End": 55211536,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -636,7 +640,8 @@
     "End": 55119401,
     "Strand": 1,
     "Biotype": "protein_coding_CDS_not_defined",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -673,7 +678,8 @@
     "End": 55171037,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -822,7 +828,8 @@
     "End": 55168635,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -971,7 +978,8 @@
     "End": 55046004,
     "Strand": 1,
     "Biotype": "protein_coding_CDS_not_defined",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -1008,7 +1016,8 @@
     "End": 55211628,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": true,
+    "IsCanonicalMSK": true,
+    "IsCanonicalEnsembl": true,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -1253,7 +1262,8 @@
     "End": 55208067,
     "Strand": 1,
     "Biotype": "retained_intron",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -1322,7 +1332,8 @@
     "End": 55200802,
     "Strand": 1,
     "Biotype": "retained_intron",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -1367,7 +1378,8 @@
     "End": 55157014,
     "Strand": 1,
     "Biotype": "retained_intron",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {
@@ -1460,7 +1472,8 @@
     "End": 55205865,
     "Strand": 1,
     "Biotype": "protein_coding",
-    "IsCanonical": false,
+    "IsCanonicalMSK": false,
+    "IsCanonicalEnsembl": false,
     "IsMANESelect": false,
     "Exons": [
       {

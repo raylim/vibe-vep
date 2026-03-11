@@ -21,8 +21,8 @@ func TestMAFWriter_Header(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := buf.String()
-	// Header should have original columns + 7 vibe.* core columns
-	wantPrefix := header + "\tvibe.hugo_symbol\tvibe.consequence\tvibe.variant_classification\tvibe.transcript_id\tvibe.hgvsc\tvibe.hgvsp\tvibe.hgvsp_short\n"
+	// Header should have original columns + 9 vibe.* core columns
+	wantPrefix := header + "\tvibe.hugo_symbol\tvibe.consequence\tvibe.variant_classification\tvibe.transcript_id\tvibe.hgvsc\tvibe.hgvsp\tvibe.hgvsp_short\tvibe.canonical_mskcc\tvibe.canonical_ensembl\n"
 	if got != wantPrefix {
 		t.Errorf("header = %q, want %q", got, wantPrefix)
 	}
@@ -63,9 +63,9 @@ func TestMAFWriter_PreservesAllColumns(t *testing.T) {
 
 	got := strings.TrimRight(buf.String(), "\n")
 	parts := strings.Split(got, "\t")
-	// 20 original + 7 vibe.* core columns
-	if len(parts) != 27 {
-		t.Fatalf("expected 27 columns, got %d", len(parts))
+	// 20 original + 9 vibe.* core columns
+	if len(parts) != 29 {
+		t.Fatalf("expected 29 columns, got %d", len(parts))
 	}
 	for i := 0; i < 20; i++ {
 		want := fields[i]
@@ -74,7 +74,7 @@ func TestMAFWriter_PreservesAllColumns(t *testing.T) {
 		}
 	}
 	// vibe.* columns should be empty
-	for i := 20; i < 27; i++ {
+	for i := 20; i < 29; i++ {
 		if parts[i] != "" {
 			t.Errorf("vibe column %d = %q, want empty", i, parts[i])
 		}

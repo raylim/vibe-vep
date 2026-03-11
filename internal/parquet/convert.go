@@ -58,7 +58,8 @@ func AnnotationToRow(chrom string, pos int64, ref, alt string, ann *annotate.Ann
 		AminoAcidChange: ann.AminoAcidChange,
 		CodonChange:     ann.CodonChange,
 
-		IsCanonical:  ann.IsCanonical,
+		IsCanonicalMSK:     ann.IsCanonicalMSK,
+		IsCanonicalEnsembl: ann.IsCanonicalEnsembl,
 		Allele:       ann.Allele,
 		Biotype:      ann.Biotype,
 		ExonNumber:   ann.ExonNumber,

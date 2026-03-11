@@ -34,33 +34,38 @@ func CanonicalFileName() string {
 	return canonicalFileName
 }
 
-// LoadCanonicalOverrides loads canonical transcript overrides from a Genome Nexus TSV file.
-// Uses the MSKCC canonical transcript column (col 8).
-func LoadCanonicalOverrides(path string) (CanonicalOverrides, error) {
+// LoadBiomartCanonicals loads both MSK and Ensembl canonical transcripts
+// from a Genome Nexus biomart TSV file.
+// Col 11 = mskcc_canonical_transcript, Col 2 = ensembl_canonical_transcript.
+func LoadBiomartCanonicals(path string) (mskcc, ensembl CanonicalOverrides, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open canonical overrides file: %w", err)
+		return nil, nil, fmt.Errorf("open biomart canonical file: %w", err)
 	}
 	defer f.Close()
 
-	return parseCanonicalOverrides(f)
+	return parseBiomartCanonicals(f)
 }
 
-// mskccTranscriptCol is the column index for MSKCC canonical transcripts
-// in the Genome Nexus biomart TSV file.
-const mskccTranscriptCol = 8
+// Biomart TSV column indices (0-indexed).
+const (
+	biomartGeneCol    = 0
+	biomartEnsemblCol = 2  // ensembl_canonical_transcript
+	biomartMSKCol     = 11 // mskcc_canonical_transcript
+)
 
-// parseCanonicalOverrides parses a Genome Nexus biomart TSV, extracting
-// the gene symbol from col 0 and the MSKCC canonical transcript from col 8.
-func parseCanonicalOverrides(reader io.Reader) (CanonicalOverrides, error) {
-	transcriptCol := mskccTranscriptCol
-	overrides := make(CanonicalOverrides)
+// parseBiomartCanonicals parses a Genome Nexus biomart TSV, extracting
+// the gene symbol (col 0), Ensembl canonical transcript (col 2),
+// and MSKCC canonical transcript (col 11).
+func parseBiomartCanonicals(reader io.Reader) (mskcc, ensembl CanonicalOverrides, err error) {
+	mskcc = make(CanonicalOverrides)
+	ensembl = make(CanonicalOverrides)
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024) // 1MB line buffer for wide biomart files
 
 	// Skip header line
 	if !scanner.Scan() {
-		return overrides, nil
+		return mskcc, ensembl, nil
 	}
 
 	for scanner.Scan() {
@@ -70,26 +75,31 @@ func parseCanonicalOverrides(reader io.Reader) (CanonicalOverrides, error) {
 		}
 
 		fields := strings.Split(line, "\t")
-		if len(fields) <= transcriptCol {
+		if len(fields) <= biomartMSKCol {
 			continue
 		}
 
-		hgnc := fields[0]
-		transcript := fields[transcriptCol]
-
-		if hgnc == "" || transcript == "" || transcript == "nan" {
+		hgnc := fields[biomartGeneCol]
+		if hgnc == "" {
 			continue
 		}
 
-		// Strip version from transcript ID
-		overrides[hgnc] = stripVersion(transcript)
+		// Ensembl canonical (col 2)
+		if ensemblTx := fields[biomartEnsemblCol]; ensemblTx != "" && ensemblTx != "nan" {
+			ensembl[hgnc] = stripVersion(ensemblTx)
+		}
+
+		// MSK canonical (col 11)
+		if mskTx := fields[biomartMSKCol]; mskTx != "" && mskTx != "nan" {
+			mskcc[hgnc] = stripVersion(mskTx)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan canonical overrides: %w", err)
+		return nil, nil, fmt.Errorf("scan biomart canonicals: %w", err)
 	}
 
-	return overrides, nil
+	return mskcc, ensembl, nil
 }
 
 // LoadMSKCCOverrides loads MSKCC isoform overrides from the genome-nexus-importer format.

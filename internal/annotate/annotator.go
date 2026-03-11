@@ -64,7 +64,7 @@ func (a *Annotator) Annotate(v *vcf.Variant) ([]*Annotation, error) {
 
 	for _, t := range transcripts {
 		// Skip non-canonical if canonicalOnly is set
-		if a.canonicalOnly && !t.IsCanonical {
+		if a.canonicalOnly && !t.IsCanonicalMSK {
 			continue
 		}
 
@@ -88,7 +88,8 @@ func (a *Annotator) Annotate(v *vcf.Variant) ([]*Annotation, error) {
 			ProteinPosition: result.ProteinPosition,
 			AminoAcidChange: result.AminoAcidChange,
 			CodonChange:     result.CodonChange,
-			IsCanonical:     t.IsCanonical,
+			IsCanonicalMSK:     t.IsCanonicalMSK,
+			IsCanonicalEnsembl: t.IsCanonicalEnsembl,
 			Allele:          v.Alt,
 			Biotype:         t.Biotype,
 			ExonNumber:      result.ExonNumber,

@@ -89,7 +89,7 @@ chr12	HAVANA	stop_codon	25245274	25245276	.	-	0	gene_id "ENSG00000133703"; trans
 	assert.Equal(t, "KRAS", tr.GeneName)
 	assert.Equal(t, "12", tr.Chrom)
 	assert.Equal(t, int8(-1), tr.Strand)
-	assert.True(t, tr.IsCanonical)
+	assert.True(t, tr.IsCanonicalEnsembl)
 	assert.Equal(t, "protein_coding", tr.Biotype)
 
 	// Check exons

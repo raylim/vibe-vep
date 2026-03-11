@@ -348,13 +348,15 @@ func loadFromGTFFASTA(logger *zap.Logger, c *cache.Cache, gtfPath, fastaPath, ca
 	loader := cache.NewGENCODELoader(gtfPath, fastaPath)
 
 	if canonicalPath != "" {
-		logger.Info("loading canonical overrides", zap.String("path", canonicalPath))
-		overrides, err := cache.LoadCanonicalOverrides(canonicalPath)
+		logger.Info("loading biomart canonicals", zap.String("path", canonicalPath))
+		mskOverrides, ensOverrides, err := cache.LoadBiomartCanonicals(canonicalPath)
 		if err != nil {
-			logger.Warn("could not load canonical overrides", zap.Error(err))
+			logger.Warn("could not load biomart canonicals", zap.Error(err))
 		} else {
-			loader.SetCanonicalOverrides(overrides)
-			logger.Info("loaded canonical overrides", zap.Int("count", len(overrides)))
+			loader.SetCanonicalOverrides(mskOverrides, ensOverrides)
+			logger.Info("loaded biomart canonicals",
+				zap.Int("msk", len(mskOverrides)),
+				zap.Int("ensembl", len(ensOverrides)))
 		}
 	}
 

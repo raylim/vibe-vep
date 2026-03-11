@@ -42,7 +42,7 @@ func TestRoundTrip(t *testing.T) {
 			TranscriptID: "ENST00000311936.8", GeneName: "KRAS", GeneID: "ENSG00000133703",
 			Consequence: "missense_variant", Impact: "MODERATE",
 			CDSPosition: 35, ProteinPosition: 12, AminoAcidChange: "G12C",
-			IsCanonical: true, Biotype: "protein_coding",
+			IsCanonicalMSK: true, IsCanonicalEnsembl: true, Biotype: "protein_coding",
 			HGVSp: "p.Gly12Cys", HGVSc: "c.34G>T",
 			AMScore: 0.9876, AMClass: "likely_pathogenic",
 			OncokbGeneType: "ONCOGENE",
@@ -53,7 +53,7 @@ func TestRoundTrip(t *testing.T) {
 			TranscriptID: "ENST00000369535.9", GeneName: "NRAS", GeneID: "ENSG00000213281",
 			Consequence: "synonymous_variant", Impact: "LOW",
 			CDSPosition: 60, ProteinPosition: 20,
-			IsCanonical: true, Biotype: "protein_coding",
+			IsCanonicalMSK: true, IsCanonicalEnsembl: true, Biotype: "protein_coding",
 			HGVSp: "p.Gly20=", HGVSc: "c.60T>C",
 		},
 	}
@@ -107,7 +107,7 @@ func TestRoundTrip(t *testing.T) {
 	assert.Equal(t, "missense_variant", got[1].Consequence)
 	assert.InDelta(t, float32(0.9876), got[1].AMScore, 0.001)
 	assert.Equal(t, "ONCOGENE", got[1].OncokbGeneType)
-	assert.True(t, got[1].IsCanonical)
+	assert.True(t, got[1].IsCanonicalMSK)
 }
 
 func TestAnnotationToRow(t *testing.T) {
@@ -116,7 +116,8 @@ func TestAnnotationToRow(t *testing.T) {
 		GeneName:     "KRAS",
 		Consequence:  "missense_variant",
 		Impact:       "MODERATE",
-		IsCanonical:  true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 	}
 	ann.SetExtra("oncokb", "gene_type", "ONCOGENE")
 
@@ -126,5 +127,5 @@ func TestAnnotationToRow(t *testing.T) {
 	assert.Equal(t, int64(12345), row.Pos)
 	assert.Equal(t, "KRAS", row.GeneName)
 	assert.Equal(t, "ONCOGENE", row.OncokbGeneType)
-	assert.True(t, row.IsCanonical)
+	assert.True(t, row.IsCanonicalMSK)
 }

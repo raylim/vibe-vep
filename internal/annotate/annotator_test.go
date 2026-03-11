@@ -45,7 +45,7 @@ func TestAnnotator_KRASG12C_Integration(t *testing.T) {
 	// Find the canonical transcript annotation
 	var canonicalAnn *Annotation
 	for _, a := range annotations {
-		if a.IsCanonical {
+		if a.IsCanonicalMSK {
 			canonicalAnn = a
 			break
 		}
@@ -66,7 +66,7 @@ func TestAnnotator_KRASG12C_Integration(t *testing.T) {
 		{"CDSPosition", canonicalAnn.CDSPosition, int64(34)},
 		{"ProteinPosition", canonicalAnn.ProteinPosition, int64(12)},
 		{"AminoAcidChange", canonicalAnn.AminoAcidChange, "G12C"},
-		{"IsCanonical", canonicalAnn.IsCanonical, true},
+		{"IsCanonicalMSK", canonicalAnn.IsCanonicalMSK, true},
 		{"Biotype", canonicalAnn.Biotype, "protein_coding"},
 	}
 
@@ -129,7 +129,7 @@ func TestAnnotator_CanonicalOnly(t *testing.T) {
 	assert.Len(t, annotations, 1)
 
 	if len(annotations) > 0 {
-		assert.True(t, annotations[0].IsCanonical)
+		assert.True(t, annotations[0].IsCanonicalMSK)
 	}
 }
 

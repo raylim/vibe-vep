@@ -109,7 +109,8 @@ func TestVCF2MAFWriter_FullRow(t *testing.T) {
 		Impact:          "MODERATE",
 		TranscriptID:    "ENST00000311936",
 		Biotype:         "protein_coding",
-		IsCanonical:     true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 		ExonNumber:      "2/5",
 		HGVSc:           "c.34G>T",
 		HGVSp:           "p.Gly12Cys",
@@ -152,8 +153,9 @@ func TestVCF2MAFWriter_FullRow(t *testing.T) {
 	assert.Equal(t, "missense_variant", fields[22]) // Consequence
 	assert.Equal(t, "MODERATE", fields[23])          // IMPACT
 	assert.Equal(t, "protein_coding", fields[24])    // BIOTYPE
-	assert.Equal(t, "YES", fields[25])               // CANONICAL
-	assert.Equal(t, "12", fields[26])                // Protein_position
+	assert.Equal(t, "YES", fields[25])               // CANONICAL_MSK
+	assert.Equal(t, "YES", fields[26])               // CANONICAL_ENSEMBL
+	assert.Equal(t, "12", fields[27])                // Protein_position
 }
 
 func TestVCF2MAFWriter_Deletion(t *testing.T) {

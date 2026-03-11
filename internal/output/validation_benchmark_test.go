@@ -118,11 +118,11 @@ func loadGENCODECache(t *testing.T, assembly string) (c *cache.Cache, duration t
 	} else {
 		loader := cache.NewGENCODELoader(gtfPath, fastaPath)
 		if canonicalPath != "" {
-			overrides, err := cache.LoadCanonicalOverrides(canonicalPath)
+			mskOverrides, ensOverrides, err := cache.LoadBiomartCanonicals(canonicalPath)
 			if err != nil {
-				t.Logf("warning: could not load canonical overrides: %v", err)
+				t.Logf("warning: could not load biomart canonicals: %v", err)
 			} else {
-				loader.SetCanonicalOverrides(overrides)
+				loader.SetCanonicalOverrides(mskOverrides, ensOverrides)
 			}
 		}
 		if err := loader.Load(c); err != nil {

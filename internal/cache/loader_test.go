@@ -30,7 +30,7 @@ func TestLoader_LoadJSONFile(t *testing.T) {
 	// Verify transcript properties
 	assert.Equal(t, "KRAS", transcript.GeneName)
 	assert.Equal(t, int8(-1), transcript.Strand)
-	assert.True(t, transcript.IsCanonical)
+	assert.True(t, transcript.IsCanonicalMSK)
 	assert.True(t, transcript.IsProteinCoding())
 	assert.Len(t, transcript.Exons, 5)
 }

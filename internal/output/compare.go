@@ -83,9 +83,9 @@ func PickMostSevere(anns []*annotate.Annotation) *annotate.Annotation {
 		if annImpact > bestImpact {
 			best = ann
 		} else if annImpact == bestImpact {
-			if ann.IsCanonical && !best.IsCanonical {
+			if ann.IsCanonicalMSK && !best.IsCanonicalMSK {
 				best = ann
-			} else if ann.IsCanonical == best.IsCanonical {
+			} else if ann.IsCanonicalMSK == best.IsCanonicalMSK {
 				if isProteinCodingBiotype(ann.Biotype) && !isProteinCodingBiotype(best.Biotype) {
 					best = ann
 				}
@@ -97,8 +97,8 @@ func PickMostSevere(anns []*annotate.Annotation) *annotate.Annotation {
 
 // AnnotationBetter returns true if ann is a better pick than current for comparison.
 func AnnotationBetter(ann, current *annotate.Annotation) bool {
-	if ann.IsCanonical != current.IsCanonical {
-		return ann.IsCanonical
+	if ann.IsCanonicalMSK != current.IsCanonicalMSK {
+		return ann.IsCanonicalMSK
 	}
 	annCoding := isProteinCodingBiotype(ann.Biotype)
 	curCoding := isProteinCodingBiotype(current.Biotype)

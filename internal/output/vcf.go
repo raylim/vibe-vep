@@ -30,7 +30,8 @@ var csqFields = []string{
 	"Protein_position",
 	"Amino_acids",
 	"Codons",
-	"CANONICAL",
+	"CANONICAL_MSK",
+	"CANONICAL_ENSEMBL",
 }
 
 // VCFWriter writes annotations in VCF format with a CSQ INFO field.
@@ -298,7 +299,11 @@ func (vw *VCFWriter) writeCSQEntry(b *strings.Builder, ann *annotate.Annotation)
 	b.WriteByte('|')
 	b.WriteString(ann.CodonChange)
 	b.WriteByte('|')
-	if ann.IsCanonical {
+	if ann.IsCanonicalMSK {
+		b.WriteString("YES")
+	}
+	b.WriteByte('|')
+	if ann.IsCanonicalEnsembl {
 		b.WriteString("YES")
 	}
 

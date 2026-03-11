@@ -23,7 +23,8 @@ func createKRASTranscript() *cache.Transcript {
 		End:         25250929,
 		Strand:      -1, // Reverse strand
 		Biotype:     "protein_coding",
-		IsCanonical: true,
+		IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 		CDSStart:    25209798, // CDS end in genomic coords (start for reverse)
 		CDSEnd:      25245384, // CDS start in genomic coords (end for reverse)
 		Exons: []cache.Exon{

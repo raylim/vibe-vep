@@ -62,7 +62,8 @@ func TestSelectBestAnnotation_VersionMismatch(t *testing.T) {
 			GeneName:     "KRAS",
 			Consequence:  "missense_variant",
 			Biotype:      "protein_coding",
-			IsCanonical:  true,
+			IsCanonicalMSK:     true,
+		IsCanonicalEnsembl: true,
 		},
 		{
 			TranscriptID: "ENST00000256078.5",
