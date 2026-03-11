@@ -86,6 +86,21 @@ _but not selected as primary (transcript-choice errors). vibe-vep only reports M
 | inframe_ins | 748 | 83.3% | 91.4% | 60.6% | 70.7% | 71.5% | 86.5% |
 | synonymous | 815 | 89.8% | 99.3% | 0.0% | 0.0% | 0.0% | 0.0% |
 
+### Failure Taxonomy by Consequence Class
+
+_Each failure type is mutually exclusive. "Any-not-best" = correct HGVSp exists in a secondary_
+_transcript (transcript selection error). "Complete fail" = no transcript has the correct HGVSp_
+_(algorithmic error or ClinVar artifact). "Not annotated" = tool emits no protein change._
+
+| Class | n | vibe: exact | any-not-best | complete | snpEff: exact | any-not-best | complete | VEP: exact | any-not-best | complete |
+|-------|---|------------|--------------|----------|---------------|--------------|----------|------------|--------------|----------|
+| missense | 69516 | 91.3% | 6.0% | 2.5% | 86.0% | 11.2% | 2.5% | 80.8% | 16.3% | 2.5% |
+| frameshift | 83151 | 88.5% | 10.0% | 0.6% | 84.1% | 15.6% | 0.2% | 82.3% | 17.3% | 0.2% |
+| stop_gained | 75508 | 83.1% | 9.1% | 7.1% | 78.9% | 13.3% | 7.7% | 77.3% | 15.9% | 6.5% |
+| inframe_del | 2019 | 86.8% | 5.9% | 6.1% | 82.1% | 12.9% | 3.7% | 78.3% | 16.6% | 0.8% |
+| inframe_ins | 748 | 83.3% | 8.2% | 6.6% | 60.6% | 10.2% | 28.2% | 71.5% | 15.0% | 1.6% |
+| synonymous | 815 | 89.8% | 9.4% | 0.5% | 0.0% | 0.0% | 97.4% | 0.0% | 0.0% | 98.5% |
+
 ### Consequence Class Match
 
 _Inferred from protein notation: missense → `missense_variant`,_
@@ -102,11 +117,11 @@ _`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._
 
 | Tool | Variants | Time | Rate |
 |------|----------|------|------|
-| vibe-vep | 232008 | 11.0s | 21162 v/s |
+| vibe-vep | 232008 | 9.8s | 23722 v/s |
 | snpEff GRCh38.115 | 232008 | 452s | 513 v/s |
 | Ensembl VEP v115 | 232008 | 1333s | 174 v/s |
 
-_vibe-vep cache load: 2.1s from duckdb cache. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._
+_vibe-vep cache load: 2.0s from duckdb cache. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._
 
 ## Interpretation
 
@@ -132,34 +147,62 @@ Two HGVS notation variants are normalized before comparison:
 
 ### Breakdown by consequence class
 
-**Missense** (n=69516 ≈70k): vibe-vep 91.3%, snpEff 86.0%, VEP 80.8%.
+**Missense** (n=69516 ≈70k): vibe-vep 91.3%, snpEff 86.0%, VEP 80.8% (any-not-best 6.0%, complete-fail 2.5%).
 All three reach ~97% "any" match, confirming the differences are transcript-choice,
 not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.
+Complete failures are 100% shared across all three tools: the dominant pattern is
+`p.Met1?` (HGVS-correct for start codon disruption) where ClinVar records the
+specific amino acid change (e.g., `p.Met1Arg`) — a known ClinVar format inconsistency.
 
-**Stop-gained** (n=75508 ≈76k): vibe-vep 83.1%, snpEff 78.9%, VEP 77.3%.
+**Stop-gained** (n=75508 ≈76k): vibe-vep 83.1%, snpEff 78.9%, VEP 77.3% (any-not-best 9.1%, complete-fail 7.1%).
 "Any" match of 91–93% indicates the remainder are transcript-drift cases.
+Of complete failures, 94% are shared across all three tools: 70% follow the
+`position_off_+1` pattern where ClinVar uses range notation `p.Xaa_YbbinsTer`
+(e.g., `p.Thr693_Val694insTer`) for deletions introducing a premature stop,
+while all tools emit the simpler `p.YbbTer` form.
 
-**Frameshift** (n=83151 ≈83k): vibe-vep 88.5%, snpEff 84.1%, VEP 82.3%.
+**Frameshift** (n=83151 ≈83k): vibe-vep 88.5%, snpEff 84.1%, VEP 82.3% (any-not-best 10.0%, complete-fail 0.6%).
 snpEff and VEP both reach ~99.7% "any" match, meaning the correct answer
 exists in their multi-transcript output.
+Complete failures are 85% vibe-specific: the dominant pattern is splice-adjacent
+frameshift indels where vibe-vep emits a `_splice` suffix HGVSp instead of the
+standard frameshift notation (`p.Asn489fs`). Fixing splice/frameshift priority
+at exon boundaries would close most of this gap.
 
-**Inframe deletion** (n=2019 ≈2k): vibe-vep 86.8%, snpEff 82.1%, VEP 78.3%.
+**Inframe deletion** (n=2019 ≈2k): vibe-vep 86.8%, snpEff 82.1%, VEP 78.3% (any-not-best 5.9%, complete-fail 6.1%).
 The high snpEff/VEP "any" (~95%) suggests the protein is correctly computed
-but the position range notation (e.g., `p.Arg27_Ile28del`) is sensitive to
-exact codon boundary choice under different normalization rules.
+by those tools. Complete failures are 96% vibe-specific: the dominant pattern
+(73%) is in-frame deletions where the edited reading frame introduces a stop
+codon — vibe-vep emits `p.PheNNNTer` (stop_gained) where ClinVar expects
+`p.PheNNNdel` (inframe_deletion). Correctly classifying stop-creating in-frame
+deletions as inframe_deletion would close most of this gap.
 
-**Inframe insertion** (n=748 ≈750): vibe-vep 83.3%, snpEff 60.6%, VEP 71.5%.
+**Inframe insertion** (n=748 ≈750): vibe-vep 83.3%, snpEff 60.6%, VEP 71.5% (any-not-best 8.2%, complete-fail 6.6%).
 Insertion HGVSp notation is particularly complex
-(position-range, dup vs ins disambiguation) and requires further investigation.
+(position-range, dup vs ins disambiguation). 57% of complete failures are
+shared across all tools (ClinVar format artifacts); the remainder require
+further investigation.
 
-**Synonymous** (n=815 ≈815): vibe-vep 89.8%, snpEff 0.0%, VEP 0.0%.
+**Synonymous** (n=815 ≈815): vibe-vep 89.8%, snpEff 0.0%, VEP 0.0% (any-not-best 9.4%, complete-fail 0.5%).
 snpEff and VEP do not emit HGVSp for synonymous variants (silent change is not
 annotated in the protein-change field); vibe-vep outputs `p.Arg273=` notation.
 
-### Why VEP "any" match is much higher than "best"
+### Failure type summary
 
-VEP annotates all transcripts and the correct HGVSp exists in a non-primary
-transcript for ~16% of variants. This is larger than snpEff (~14%) or vibe-vep
-(~7%), suggesting VEP's primary-transcript ranking is less aligned with MANE
-than vibe-vep, but VEP's underlying nucleotide consequence prediction is
-accurate for virtually all variants.
+Three distinct failure types account for all mismatches:
+
+- **Any-not-best** (8.4% vibe / 13.4% snpEff / 16.5% VEP): The correct HGVSp exists in a secondary transcript. Primary cause: transcript prioritization —
+  ClinVar submissions often pre-date MANE Select and use historical NM_ transcripts.
+  vibe-vep prefers MANE/canonical; snpEff and VEP rank by impact tier.
+
+- **Complete fail** (3.5% vibe / 3.9% snpEff / 3.4% VEP): No transcript has the expected HGVSp.
+  Failure origin varies by consequence class:
+  - **stop_gained / missense** (94–100% all-tools-fail): ClinVar format artifacts — `p.Xaa_YbbinsTer` range notation and `p.Met1Arg` vs HGVS-correct `p.Met1?`.
+  - **frameshift** (85% vibe-specific): splice-adjacent indels where vibe-vep emits `_splice`
+    suffix instead of frameshift HGVSp; fixable by improving splice/frameshift priority.
+  - **inframe_deletion** (96% vibe-specific): stop-creating deletions misclassified as
+    stop_gained; fixable by preserving inframe_deletion classification when reading frame is intact.
+
+- **Not annotated** (1508 vibe / 318 snpEff / 837 VEP): Tool emits no protein change (annotates as splice, intron, UTR, etc.).
+  Often genuine variant effect disagreement or boundary-condition variants.
+

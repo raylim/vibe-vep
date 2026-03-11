@@ -213,6 +213,9 @@ func TestClinVarBenchmark(t *testing.T) {
 							break
 						}
 					}
+					if !bestAny {
+						vibe.completeFail++
+					}
 				} else {
 					vibe.notAnnotated++
 				}
@@ -221,7 +224,8 @@ func TestClinVarBenchmark(t *testing.T) {
 					if consequenceMatches(best.Consequence, expClass) {
 						vibe.consequMatch++
 					}
-					vibe.trackClass(expClass, bestExact, bestAny)
+					completeFail := best.HGVSp != "" && !bestAny
+					vibe.trackClass(expClass, bestExact, bestAny, completeFail)
 				}
 			}
 		}
@@ -271,6 +275,9 @@ func TestClinVarBenchmark(t *testing.T) {
 							break
 						}
 					}
+					if !bestAny {
+						snpEff.completeFail++
+					}
 					if expClass != "" {
 						snpEff.consequTotal++
 						if consequenceMatches(snpEffConsequenceToSO(best.consequence), expClass) {
@@ -281,7 +288,8 @@ func TestClinVarBenchmark(t *testing.T) {
 					snpEff.notAnnotated++
 				}
 				if expClass != "" {
-					snpEff.trackClass(expClass, bestExact, bestAny)
+					completeFail := best != nil && best.hgvsp != "" && !bestAny
+					snpEff.trackClass(expClass, bestExact, bestAny, completeFail)
 				}
 			}
 		}
@@ -331,6 +339,9 @@ func TestClinVarBenchmark(t *testing.T) {
 							break
 						}
 					}
+					if !bestAny {
+						vep.completeFail++
+					}
 					if expClass != "" {
 						vep.consequTotal++
 						if consequenceMatches(best.consequence, expClass) {
@@ -341,7 +352,8 @@ func TestClinVarBenchmark(t *testing.T) {
 					vep.notAnnotated++
 				}
 				if expClass != "" {
-					vep.trackClass(expClass, bestExact, bestAny)
+					completeFail := best != nil && best.hgvsp != "" && !bestAny
+					vep.trackClass(expClass, bestExact, bestAny, completeFail)
 				}
 			}
 		}
@@ -389,21 +401,23 @@ func TestClinVarBenchmark(t *testing.T) {
 
 // classCounts holds per-consequence-class accuracy counts for one tool.
 type classCounts struct {
-	total, exact, any int
+	total, exact, any, completeFail int
 }
 
 // clinvarCounts holds benchmark counts for one annotation tool.
 type clinvarCounts struct {
 	total, exactMatch, anyMatch, maneTotal, maneExact         int
 	versionExactTotal, versionExactMatch, versionExactAny     int
-	consequMatch, consequTotal, notAnnotated                   int
+	consequMatch, consequTotal, notAnnotated, completeFail     int
 	snvTotal, snvExact                                         int
 	indelTotal, indelExact                                     int
 	byClass                                                    map[string]*classCounts
 }
 
 // trackClass records an observation for a consequence class.
-func (c *clinvarCounts) trackClass(class string, exact, any bool) {
+// complete is true when the tool emitted a non-empty HGVSp but it matches
+// neither the best nor any transcript.
+func (c *clinvarCounts) trackClass(class string, exact, any, complete bool) {
 	if c.byClass == nil {
 		c.byClass = make(map[string]*classCounts)
 	}
@@ -418,6 +432,9 @@ func (c *clinvarCounts) trackClass(class string, exact, any bool) {
 	}
 	if any {
 		cc.any++
+	}
+	if complete {
+		cc.completeFail++
 	}
 }
 // Preference: MANE > higher-review-status > first seen.
@@ -835,6 +852,46 @@ func writeClinVarReport(
 		}
 	}
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "### Failure Taxonomy by Consequence Class\n\n")
+	fmt.Fprintf(w, "_Each failure type is mutually exclusive. \"Any-not-best\" = correct HGVSp exists in a secondary_\n")
+	fmt.Fprintf(w, "_transcript (transcript selection error). \"Complete fail\" = no transcript has the correct HGVSp_\n")
+	fmt.Fprintf(w, "_(algorithmic error or ClinVar artifact). \"Not annotated\" = tool emits no protein change._\n\n")
+	if hasSnpEff && hasVEP {
+		fmt.Fprintf(w, "| Class | n | vibe: exact | any-not-best | complete | snpEff: exact | any-not-best | complete | VEP: exact | any-not-best | complete |\n")
+		fmt.Fprintf(w, "|-------|---|------------|--------------|----------|---------------|--------------|----------|------------|--------------|----------|\n")
+	} else {
+		fmt.Fprintf(w, "| Class | n | vibe: exact | any-not-best | complete fail |\n")
+		fmt.Fprintf(w, "|-------|---|------------|--------------|---------------|\n")
+	}
+	for _, cl := range classOrder {
+		vc := vibe.byClass[cl.id]
+		if vc == nil || vc.total == 0 {
+			continue
+		}
+		anyNotBest := vc.any - vc.exact
+		if hasSnpEff && hasVEP {
+			sc := snpEff.byClass[cl.id]
+			vc2 := vep.byClass[cl.id]
+			if sc == nil {
+				sc = &classCounts{}
+			}
+			if vc2 == nil {
+				vc2 = &classCounts{}
+			}
+			seAnyNotBest := sc.any - sc.exact
+			vepAnyNotBest := vc2.any - vc2.exact
+			fmt.Fprintf(w, "| %s | %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+				cl.label, vc.total,
+				pct(vc.exact, vc.total), pct(anyNotBest, vc.total), pct(vc.completeFail, vc.total),
+				pct(sc.exact, sc.total), pct(seAnyNotBest, sc.total), pct(sc.completeFail, sc.total),
+				pct(vc2.exact, vc2.total), pct(vepAnyNotBest, vc2.total), pct(vc2.completeFail, vc2.total))
+		} else {
+			fmt.Fprintf(w, "| %s | %d | %s | %s | %s |\n",
+				cl.label, vc.total,
+				pct(vc.exact, vc.total), pct(anyNotBest, vc.total), pct(vc.completeFail, vc.total))
+		}
+	}
+	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Consequence Class Match\n\n")
 	fmt.Fprintf(w, "_Inferred from protein notation: missense → `missense_variant`,_\n")
 	fmt.Fprintf(w, "_Ter/\\* suffix → `stop_gained`, `fs` → `frameshift_variant`,_\n")
@@ -906,15 +963,31 @@ func writeClinVarReport(
 
 	classSummary := map[string]string{
 		"missense_variant": "All three reach ~97% \"any\" match, confirming the differences are transcript-choice,\n" +
-			"not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.\n\n",
-		"stop_gained": "\"Any\" match of 91–93% indicates the remainder are transcript-drift cases.\n\n",
+			"not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.\n" +
+			"Complete failures are 100% shared across all three tools: the dominant pattern is\n" +
+			"`p.Met1?` (HGVS-correct for start codon disruption) where ClinVar records the\n" +
+			"specific amino acid change (e.g., `p.Met1Arg`) — a known ClinVar format inconsistency.\n\n",
+		"stop_gained": "\"Any\" match of 91–93% indicates the remainder are transcript-drift cases.\n" +
+			"Of complete failures, 94% are shared across all three tools: 70% follow the\n" +
+			"`position_off_+1` pattern where ClinVar uses range notation `p.Xaa_YbbinsTer`\n" +
+			"(e.g., `p.Thr693_Val694insTer`) for deletions introducing a premature stop,\n" +
+			"while all tools emit the simpler `p.YbbTer` form.\n\n",
 		"frameshift": "snpEff and VEP both reach ~99.7% \"any\" match, meaning the correct answer\n" +
-			"exists in their multi-transcript output.\n\n",
+			"exists in their multi-transcript output.\n" +
+			"Complete failures are 85% vibe-specific: the dominant pattern is splice-adjacent\n" +
+			"frameshift indels where vibe-vep emits a `_splice` suffix HGVSp instead of the\n" +
+			"standard frameshift notation (`p.Asn489fs`). Fixing splice/frameshift priority\n" +
+			"at exon boundaries would close most of this gap.\n\n",
 		"inframe_deletion": "The high snpEff/VEP \"any\" (~95%) suggests the protein is correctly computed\n" +
-			"but the position range notation (e.g., `p.Arg27_Ile28del`) is sensitive to\n" +
-			"exact codon boundary choice under different normalization rules.\n\n",
+			"by those tools. Complete failures are 96% vibe-specific: the dominant pattern\n" +
+			"(73%) is in-frame deletions where the edited reading frame introduces a stop\n" +
+			"codon — vibe-vep emits `p.PheNNNTer` (stop_gained) where ClinVar expects\n" +
+			"`p.PheNNNdel` (inframe_deletion). Correctly classifying stop-creating in-frame\n" +
+			"deletions as inframe_deletion would close most of this gap.\n\n",
 		"inframe_insertion": "Insertion HGVSp notation is particularly complex\n" +
-			"(position-range, dup vs ins disambiguation) and requires further investigation.\n\n",
+			"(position-range, dup vs ins disambiguation). 57% of complete failures are\n" +
+			"shared across all tools (ClinVar format artifacts); the remainder require\n" +
+			"further investigation.\n\n",
 		"synonymous": "snpEff and VEP do not emit HGVSp for synonymous variants (silent change is not\n" +
 			"annotated in the protein-change field); vibe-vep outputs `p.Arg273=` notation.\n\n",
 	}
@@ -924,8 +997,11 @@ func writeClinVarReport(
 		sc := snpEff.byClass[ci.id]
 		vc2 := vep.byClass[ci.id]
 		vibeStr := "n/a"
+		var vibeAnyNotBest, vibeComplete int
 		if vc != nil {
 			vibeStr = pct(vc.exact, vc.total)
+			vibeAnyNotBest = vc.any - vc.exact
+			vibeComplete = vc.completeFail
 		}
 		snpEffStr := "n/a"
 		if sc != nil && hasSnpEff {
@@ -939,8 +1015,13 @@ func writeClinVarReport(
 		if vc != nil {
 			totalStr = "n=" + strconv.Itoa(vc.total) + " " + ci.approxN
 		}
-		fmt.Fprintf(w, "**%s** (%s): vibe-vep %s, snpEff %s, VEP %s.\n",
+		fmt.Fprintf(w, "**%s** (%s): vibe-vep %s, snpEff %s, VEP %s",
 			ci.label, totalStr, vibeStr, snpEffStr, vepStr)
+		if vc != nil {
+			fmt.Fprintf(w, " (any-not-best %s, complete-fail %s)",
+				pct(vibeAnyNotBest, vc.total), pct(vibeComplete, vc.total))
+		}
+		fmt.Fprintln(w, ".")
 		if note, ok := classSummary[ci.id]; ok {
 			fmt.Fprint(w, note)
 		} else {
@@ -948,12 +1029,45 @@ func writeClinVarReport(
 		}
 	}
 
-	fmt.Fprintf(w, "### Why VEP \"any\" match is much higher than \"best\"\n\n")
-	fmt.Fprintf(w, "VEP annotates all transcripts and the correct HGVSp exists in a non-primary\n")
-	fmt.Fprintf(w, "transcript for ~16%% of variants. This is larger than snpEff (~14%%) or vibe-vep\n")
-	fmt.Fprintf(w, "(~7%%), suggesting VEP's primary-transcript ranking is less aligned with MANE\n")
-	fmt.Fprintf(w, "than vibe-vep, but VEP's underlying nucleotide consequence prediction is\n")
-	fmt.Fprintf(w, "accurate for virtually all variants.\n")
+	vibeAnyNotBestPct := 100 * float64(vibe.anyMatch-vibe.exactMatch) / float64(vibe.total)
+	seAnyNotBestPct := 0.0
+	if hasSnpEff {
+		seAnyNotBestPct = 100 * float64(snpEff.anyMatch-snpEff.exactMatch) / float64(snpEff.total)
+	}
+	vepAnyNotBestPct := 0.0
+	if hasVEP {
+		vepAnyNotBestPct = 100 * float64(vep.anyMatch-vep.exactMatch) / float64(vep.total)
+	}
+	fmt.Fprintf(w, "### Failure type summary\n\n")
+	fmt.Fprintf(w, "Three distinct failure types account for all mismatches:\n\n")
+	fmt.Fprintf(w, "- **Any-not-best** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP): "+
+		"The correct HGVSp exists in a secondary transcript. Primary cause: transcript prioritization —\n"+
+		"  ClinVar submissions often pre-date MANE Select and use historical NM_ transcripts.\n"+
+		"  vibe-vep prefers MANE/canonical; snpEff and VEP rank by impact tier.\n\n",
+		vibeAnyNotBestPct, seAnyNotBestPct, vepAnyNotBestPct)
+	vibeCompletePct := 100 * float64(vibe.completeFail) / float64(vibe.total)
+	seCompletePct := 0.0
+	if hasSnpEff {
+		seCompletePct = 100 * float64(snpEff.completeFail) / float64(snpEff.total)
+	}
+	vepCompletePct := 0.0
+	if hasVEP {
+		vepCompletePct = 100 * float64(vep.completeFail) / float64(vep.total)
+	}
+	fmt.Fprintf(w, "- **Complete fail** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP): "+
+		"No transcript has the expected HGVSp.\n"+
+		"  Failure origin varies by consequence class:\n"+
+		"  - **stop_gained / missense** (94–100%% all-tools-fail): ClinVar format artifacts — "+
+		"`p.Xaa_YbbinsTer` range notation and `p.Met1Arg` vs HGVS-correct `p.Met1?`.\n"+
+		"  - **frameshift** (85%% vibe-specific): splice-adjacent indels where vibe-vep emits `_splice`\n"+
+		"    suffix instead of frameshift HGVSp; fixable by improving splice/frameshift priority.\n"+
+		"  - **inframe_deletion** (96%% vibe-specific): stop-creating deletions misclassified as\n"+
+		"    stop_gained; fixable by preserving inframe_deletion classification when reading frame is intact.\n\n",
+		vibeCompletePct, seCompletePct, vepCompletePct)
+	fmt.Fprintf(w, "- **Not annotated** (%d vibe / %d snpEff / %d VEP): "+
+		"Tool emits no protein change (annotates as splice, intron, UTR, etc.).\n"+
+		"  Often genuine variant effect disagreement or boundary-condition variants.\n\n",
+		vibe.notAnnotated, snpEff.notAnnotated, vep.notAnnotated)
 
 	return w.Flush()
 }
@@ -1305,6 +1419,194 @@ func TestNotAnnotatedDebug(t *testing.T) {
 	for _, s := range samples {
 		t.Logf("  %s:%d %s>%s  expected=%q  bestConseq=%q  reason=%s",
 			s.chrom, s.pos, s.ref, s.alt, s.expected, s.bestConseq, s.reason)
+	}
+}
+
+// TestComputationalDifferences performs a deep failure analysis of vibe-vep
+// against ClinVar, categorizing failures and cross-referencing with snpEff/VEP
+// to distinguish tool-specific bugs from ClinVar data artifacts.
+func TestComputationalDifferences(t *testing.T) {
+	summaryPath := filepath.Join(os.Getenv("HOME"), ".vibe-vep", "clinvar", "variant_summary.txt.gz")
+	if _, err := os.Stat(summaryPath); err != nil {
+		t.Skipf("ClinVar summary not found — run scripts/prepare_clinvar.sh first")
+	}
+
+	entries, err := clv.ParseSummaryFile(summaryPath)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	entries = deduplicateEntries(entries)
+
+	c, _, _ := loadClinVarCache(t)
+	ann := annotate.NewAnnotator(c)
+
+	// Load cross-tool annotations if available.
+	clinvarDir := filepath.Join("../../testdata", "clinvar")
+	var seMap snpEffVariantMap
+	var vepMap vepVariantMap
+	hasSnpEff, hasVEP := false, false
+	if _, err := os.Stat(filepath.Join(clinvarDir, "snpeff.vcf.gz")); err == nil {
+		seMap, err = loadSnpEffVCF(filepath.Join(clinvarDir, "snpeff.vcf.gz"))
+		if err == nil {
+			hasSnpEff = true
+		}
+	}
+	if _, err := os.Stat(filepath.Join(clinvarDir, "vep.vcf.gz")); err == nil {
+		vepMap, err = loadVEPVCF(filepath.Join(clinvarDir, "vep.vcf.gz"))
+		if err == nil {
+			hasVEP = true
+		}
+	}
+
+	// failurePattern categorizes a mismatch between expected and got HGVSp.
+	// Both inputs should already be normalized.
+	failurePattern := func(expected, got string) string {
+		if got == "" {
+			return "no_hgvsp"
+		}
+		// Check for unusual ClinVar formats we can't match.
+		lower := strings.ToLower(expected)
+		if strings.Contains(lower, "extter") || strings.Contains(lower, "_ext") {
+			return "readthrough_extension"
+		}
+		if expected == "0" || expected == "?" {
+			return "unknown_effect"
+		}
+		if strings.Contains(lower, "splice") {
+			return "clinvar_splice_notation"
+		}
+		// For missense/stop: check if position matches but amino acid differs.
+		rePos := regexp.MustCompile(`^[A-Za-z]+(\d+)`)
+		mExp := rePos.FindStringSubmatch(expected)
+		mGot := rePos.FindStringSubmatch(got)
+		if mExp != nil && mGot != nil {
+			if mExp[1] == mGot[1] {
+				return "wrong_amino_acid_same_pos"
+			}
+			var posExp, posGot int
+			fmt.Sscanf(mExp[1], "%d", &posExp)
+			fmt.Sscanf(mGot[1], "%d", &posGot)
+			diff := posGot - posExp
+			if diff >= -2 && diff <= 2 {
+				return fmt.Sprintf("position_off_%+d", diff)
+			}
+			return "wrong_position"
+		}
+		return "other_mismatch"
+	}
+
+	type failureEntry struct {
+		class, pattern string
+		allToolsFail   bool // all available tools fail on this variant
+		vibeGot        string
+		expected       string
+		loc            string
+	}
+
+	// Track complete failures and their patterns.
+	patternCounts := make(map[string]map[string]int) // class → pattern → count
+	allToolsFailCount := make(map[string]int)         // class → all-tools-fail count
+	var samplesByClass = make(map[string][]failureEntry)
+	const maxSamples = 10
+
+	for _, e := range entries {
+		v := &vcf.Variant{Chrom: e.Chrom, Pos: e.Pos, Ref: e.Ref, Alt: e.Alt}
+		anns, _ := ann.Annotate(v)
+		best := output.PickBestAnnotation(anns)
+		expected := normalizeProteinStr(e.Protein)
+		expClass := inferConsequenceClass(e.Protein)
+		if expClass == "" {
+			continue
+		}
+
+		// Check if vibe-vep has a complete failure (emits HGVSp but none match).
+		vibeGot := ""
+		vibeCompleteFail := false
+		if best != nil && best.HGVSp != "" {
+			vibeGot = normalizeProteinStr(best.HGVSp)
+			matched := false
+			for _, a := range anns {
+				if normalizeProteinStr(a.HGVSp) == expected {
+					matched = true
+					break
+				}
+			}
+			vibeCompleteFail = !matched
+		}
+		if !vibeCompleteFail {
+			continue
+		}
+
+		// Determine if snpEff and VEP also fail.
+		seCompleteFail := true
+		if hasSnpEff {
+			seAnns := seMap.lookup(v)
+			for _, a := range seAnns {
+				if normalizeProteinStr(a.hgvsp) == expected {
+					seCompleteFail = false
+					break
+				}
+			}
+		}
+		vepCompleteFail := true
+		if hasVEP {
+			vepAnns := vepMap.lookup(v)
+			for _, a := range vepAnns {
+				if normalizeProteinStr(a.hgvsp) == expected {
+					vepCompleteFail = false
+					break
+				}
+			}
+		}
+		allFail := (!hasSnpEff || seCompleteFail) && (!hasVEP || vepCompleteFail)
+
+		pat := failurePattern(expected, vibeGot)
+		if patternCounts[expClass] == nil {
+			patternCounts[expClass] = make(map[string]int)
+		}
+		patternCounts[expClass][pat]++
+		if allFail {
+			allToolsFailCount[expClass]++
+		}
+
+		if len(samplesByClass[expClass]) < maxSamples {
+			allSuffix := ""
+			if allFail {
+				allSuffix = " [ALL TOOLS]"
+			}
+			samplesByClass[expClass] = append(samplesByClass[expClass], failureEntry{
+				class:        expClass,
+				pattern:      pat + allSuffix,
+				allToolsFail: allFail,
+				vibeGot:      vibeGot,
+				expected:     expected,
+				loc:          fmt.Sprintf("%s:%d %s>%s", e.Chrom, e.Pos, e.Ref, e.Alt),
+			})
+		}
+	}
+
+	t.Logf("=== Complete-failure analysis (vibe-vep emits HGVSp but no transcript matches) ===")
+	for _, class := range []string{"stop_gained", "missense_variant", "frameshift", "inframe_deletion", "inframe_insertion"} {
+		patterns := patternCounts[class]
+		if len(patterns) == 0 {
+			continue
+		}
+		total := 0
+		for _, n := range patterns {
+			total += n
+		}
+		t.Logf("\n[%s] %d complete failures (%d all-tools-fail = %.0f%% likely ClinVar artifact)",
+			class, total, allToolsFailCount[class],
+			100*float64(allToolsFailCount[class])/float64(total))
+		t.Logf("  Pattern breakdown:")
+		for pat, n := range patterns {
+			t.Logf("    %-35s: %d (%.1f%%)", pat, n, 100*float64(n)/float64(total))
+		}
+		t.Logf("  Samples:")
+		for _, s := range samplesByClass[class] {
+			t.Logf("    %-40s  expected=%-20s  got=%-20s  %s",
+				s.loc, s.expected, s.vibeGot, s.pattern)
+		}
 	}
 }
 
