@@ -21,8 +21,8 @@ func TestMAFWriter_Header(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := buf.String()
-	// Header should have original columns + 9 vibe.* core columns + vibe.all_effects
-	wantPrefix := header + "\tvibe.hugo_symbol\tvibe.consequence\tvibe.variant_classification\tvibe.transcript_id\tvibe.hgvsc\tvibe.hgvsp\tvibe.hgvsp_short\tvibe.canonical_mskcc\tvibe.canonical_ensembl\tvibe.all_effects\n"
+	// Header should have original columns + 10 vibe.* core columns + vibe.all_effects
+	wantPrefix := header + "\tvibe.hugo_symbol\tvibe.consequence\tvibe.variant_classification\tvibe.transcript_id\tvibe.hgvsc\tvibe.hgvsp\tvibe.hgvsp_short\tvibe.canonical_mskcc\tvibe.canonical_ensembl\tvibe.canonical_mane\tvibe.all_effects\n"
 	if got != wantPrefix {
 		t.Errorf("header = %q, want %q", got, wantPrefix)
 	}
@@ -63,9 +63,9 @@ func TestMAFWriter_PreservesAllColumns(t *testing.T) {
 
 	got := strings.TrimRight(buf.String(), "\n")
 	parts := strings.Split(got, "\t")
-	// 20 original + 9 vibe.* core columns + 1 vibe.all_effects
-	if len(parts) != 30 {
-		t.Fatalf("expected 30 columns, got %d", len(parts))
+	// 20 original + 10 vibe.* core columns + 1 vibe.all_effects
+	if len(parts) != 31 {
+		t.Fatalf("expected 31 columns, got %d", len(parts))
 	}
 	for i := 0; i < 20; i++ {
 		want := fields[i]
@@ -494,8 +494,8 @@ func TestMAFWriter_AllEffects_Disabled(t *testing.T) {
 	// 1 orig + 9 core = 10 columns per row (no all_effects)
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
 	parts := strings.Split(lines[1], "\t")
-	if len(parts) != 10 {
-		t.Errorf("expected 10 columns (no all_effects), got %d", len(parts))
+	if len(parts) != 11 {
+		t.Errorf("expected 11 columns (no all_effects), got %d", len(parts))
 	}
 }
 
@@ -785,11 +785,11 @@ func TestMAFWriter_ExcludeMultipleColumns(t *testing.T) {
 		t.Error("vibe.all_effects should appear in header")
 	}
 
-	// Row: 1 orig + 7 core (9 - 2 excluded) + 1 all_effects = 9 columns
+	// Row: 1 orig + 8 core (10 - 2 excluded) + 1 all_effects = 10 columns
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
 	parts := strings.Split(lines[1], "\t")
-	if len(parts) != 9 {
-		t.Errorf("expected 9 columns (1 orig + 7 core + 1 all_effects), got %d", len(parts))
+	if len(parts) != 10 {
+		t.Errorf("expected 10 columns (1 orig + 8 core + 1 all_effects), got %d", len(parts))
 	}
 }
 

@@ -193,11 +193,11 @@ func (m *MAFWriter) writeRowReplace(rawFields []string, ann *annotate.Annotation
 	return err
 }
 
-// coreValues returns the 9 core column values for an annotation.
+// coreValues returns the 10 core column values for an annotation.
 // The order matches annotate.CoreColumns.
-func (m *MAFWriter) coreValues(ann *annotate.Annotation, v *vcf.Variant) [9]string {
+func (m *MAFWriter) coreValues(ann *annotate.Annotation, v *vcf.Variant) [10]string {
 	if ann == nil {
-		return [9]string{}
+		return [10]string{}
 	}
 	canonMSK := ""
 	if ann.IsCanonicalMSK {
@@ -207,7 +207,11 @@ func (m *MAFWriter) coreValues(ann *annotate.Annotation, v *vcf.Variant) [9]stri
 	if ann.IsCanonicalEnsembl {
 		canonEns = "YES"
 	}
-	return [9]string{
+	canonMANE := ""
+	if ann.IsMANESelect {
+		canonMANE = "YES"
+	}
+	return [10]string{
 		ann.GeneName,                              // hugo_symbol
 		ann.Consequence,                           // consequence
 		SOToMAFClassification(ann.Consequence, v), // variant_classification
@@ -217,6 +221,7 @@ func (m *MAFWriter) coreValues(ann *annotate.Annotation, v *vcf.Variant) [9]stri
 		HGVSpToShort(ann.HGVSp),                   // hgvsp_short
 		canonMSK,                                   // canonical_mskcc
 		canonEns,                                   // canonical_ensembl
+		canonMANE,                                  // canonical_mane
 	}
 }
 

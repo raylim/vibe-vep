@@ -42,6 +42,7 @@ var CoreColumns = []ColumnDef{
 	{Name: "hgvsp_short", Description: "HGVS protein notation (1-letter)"},
 	{Name: "canonical_mskcc", Description: "MSK canonical transcript"},
 	{Name: "canonical_ensembl", Description: "Ensembl canonical transcript"},
+	{Name: "canonical_mane", Description: "MANE Select transcript"},
 }
 
 // SetExtra sets a value in the annotation's Extra map.

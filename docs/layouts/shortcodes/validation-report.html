@@ -12,8 +12,8 @@
 <p>
   Generated: {{ $data.generated }}<br>
   Assembly: {{ $data.assembly }}<br>
-  GENCODE transcripts: {{ $data.transcripts }} (loaded from {{ $data.load_source }} in {{ $data.load_duration }})<br>
-  Workers: {{ $data.workers }} (GOMAXPROCS)
+  GENCODE transcripts: {{ printf "%.0f" $data.transcripts }} (loaded from {{ $data.load_source }} in {{ $data.load_duration }})<br>
+  Workers: {{ printf "%.0f" $data.workers }} (GOMAXPROCS)
 </p>
 
 {{ partial "validation-table.html" (dict "table" $data.match_rates "caption" "Match Rates") }}
@@ -25,9 +25,9 @@
 {{ with $data.cancer_genes }}
   <h3>Cancer Gene Mismatches</h3>
   {{ if eq .genes_with_mismatches 0 }}
-    <p>No mismatches across all {{ .total_genes }} cancer genes tested.</p>
+    <p>No mismatches across all {{ printf "%.0f" .total_genes }} cancer genes tested.</p>
   {{ else }}
-    <p>{{ sub .total_genes .genes_with_mismatches }}/{{ .total_genes }} cancer genes have 100% match. Mismatches in {{ .genes_with_mismatches }} gene(s):</p>
+    <p>{{ printf "%.0f" .total_genes }} cancer genes have 100% match. Mismatches in {{ printf "%.0f" .genes_with_mismatches }} gene(s):</p>
     <div class="table-responsive">
       <table class="table validation-table">
         <thead>

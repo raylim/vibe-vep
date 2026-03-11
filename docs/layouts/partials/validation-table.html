@@ -16,7 +16,7 @@
         <tr>
           {{ range $i, $val := . }}
             {{ $align := index $table.align $i }}
-            <td style="text-align: {{ $align }}">{{ $val }}</td>
+            <td style="text-align: {{ $align }}">{{ if (printf "%T" $val | eq "float64") }}{{ printf "%.0f" $val }}{{ else }}{{ $val }}{{ end }}</td>
           {{ end }}
         </tr>
       {{ end }}
@@ -24,7 +24,7 @@
         <tr class="totals-row">
           {{ range $i, $val := . }}
             {{ $align := index $table.align $i }}
-            <td style="text-align: {{ $align }}"><strong>{{ $val }}</strong></td>
+            <td style="text-align: {{ $align }}"><strong>{{ if (printf "%T" $val | eq "float64") }}{{ printf "%.0f" $val }}{{ else }}{{ $val }}{{ end }}</strong></td>
           {{ end }}
         </tr>
       {{ end }}

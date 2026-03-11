@@ -473,8 +473,8 @@ func TestValidateExcludeColumns(t *testing.T) {
 
 func TestValidOutputColumns(t *testing.T) {
 	cols := ValidOutputColumns()
-	// 9 core + all_effects = 10
-	assert.Len(t, cols, 10)
+	// 10 core + all_effects = 11
+	assert.Len(t, cols, 11)
 	assert.True(t, cols["hugo_symbol"])
 	assert.True(t, cols["all_effects"])
 	assert.False(t, cols["not_a_column"])

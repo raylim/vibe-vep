@@ -39,6 +39,7 @@ var vcf2mafColumns = []string{
 	"BIOTYPE",
 	"CANONICAL_MSK",
 	"CANONICAL_ENSEMBL",
+	"CANONICAL_MANE",
 	"Protein_position",
 	"Amino_acids",
 	"Codons",
@@ -178,6 +179,11 @@ func (m *VCF2MAFWriter) WriteRow(v *vcf.Variant, ann *annotate.Annotation, allAn
 			writeField("")
 		}
 		if ann.IsCanonicalEnsembl {
+			writeField("YES")
+		} else {
+			writeField("")
+		}
+		if ann.IsMANESelect {
 			writeField("YES")
 		} else {
 			writeField("")

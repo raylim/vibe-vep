@@ -90,6 +90,7 @@ func (a *Annotator) Annotate(v *vcf.Variant) ([]*Annotation, error) {
 			CodonChange:     result.CodonChange,
 			IsCanonicalMSK:     t.IsCanonicalMSK,
 			IsCanonicalEnsembl: t.IsCanonicalEnsembl,
+			IsMANESelect:       t.IsMANESelect,
 			Allele:          v.Alt,
 			Biotype:         t.Biotype,
 			ExonNumber:      result.ExonNumber,

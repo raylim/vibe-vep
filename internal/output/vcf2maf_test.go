@@ -155,7 +155,8 @@ func TestVCF2MAFWriter_FullRow(t *testing.T) {
 	assert.Equal(t, "protein_coding", fields[24])    // BIOTYPE
 	assert.Equal(t, "YES", fields[25])               // CANONICAL_MSK
 	assert.Equal(t, "YES", fields[26])               // CANONICAL_ENSEMBL
-	assert.Equal(t, "12", fields[27])                // Protein_position
+	assert.Equal(t, "", fields[27])                  // CANONICAL_MANE
+	assert.Equal(t, "12", fields[28])                // Protein_position
 }
 
 func TestVCF2MAFWriter_Deletion(t *testing.T) {

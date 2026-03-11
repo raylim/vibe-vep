@@ -29,6 +29,7 @@ type Row struct {
 	// Transcript details
 	IsCanonicalMSK     bool `parquet:"is_canonical_msk,zstd"`
 	IsCanonicalEnsembl bool `parquet:"is_canonical_ensembl,zstd"`
+	IsMANESelect       bool `parquet:"is_mane_select,zstd"`
 	Allele       string `parquet:"allele,zstd"`
 	Biotype      string `parquet:"biotype,dict,zstd"`
 	ExonNumber   string `parquet:"exon_number,zstd"`

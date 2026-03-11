@@ -70,6 +70,7 @@ func (s *Store) ensureSchema() error {
 		codon_change VARCHAR,
 		is_canonical_msk BOOLEAN,
 		is_canonical_ensembl BOOLEAN,
+		is_mane_select BOOLEAN,
 		allele VARCHAR,
 		biotype VARCHAR,
 		exon_number VARCHAR,

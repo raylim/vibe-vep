@@ -60,6 +60,7 @@ func AnnotationToRow(chrom string, pos int64, ref, alt string, ann *annotate.Ann
 
 		IsCanonicalMSK:     ann.IsCanonicalMSK,
 		IsCanonicalEnsembl: ann.IsCanonicalEnsembl,
+		IsMANESelect:       ann.IsMANESelect,
 		Allele:       ann.Allele,
 		Biotype:      ann.Biotype,
 		ExonNumber:   ann.ExonNumber,

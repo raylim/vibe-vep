@@ -66,6 +66,7 @@ type Annotation struct {
 	CodonChange     string            // e.g., "GGT/TGT", empty if not coding
 	IsCanonicalMSK     bool // Annotation on MSK canonical transcript
 	IsCanonicalEnsembl bool // Annotation on Ensembl canonical transcript
+	IsMANESelect       bool // Annotation on MANE Select transcript
 	Allele          string            // The alternate allele
 	Biotype         string            // Transcript biotype
 	ExonNumber      string            // Exon number (e.g., "2/5")
