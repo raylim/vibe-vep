@@ -1023,6 +1023,100 @@ func TestFrameshiftPositionDebug(t *testing.T) {
 	}
 }
 
+// TestInframeIndelDebug samples inframe_deletion and inframe_insertion variants
+// where vibe-vep disagrees with ClinVar to understand the failure patterns.
+func TestInframeIndelDebug(t *testing.T) {
+	summaryPath := filepath.Join(os.Getenv("HOME"), ".vibe-vep", "clinvar", "variant_summary.txt.gz")
+	if _, err := os.Stat(summaryPath); err != nil {
+		t.Skipf("ClinVar summary not found — run scripts/prepare_clinvar.sh first")
+	}
+	entries, err := clv.ParseSummaryFile(summaryPath)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	entries = deduplicateEntries(entries)
+
+	cache, _, _ := loadClinVarCache(t)
+	ann := annotate.NewAnnotator(cache)
+
+	type sample struct {
+		chrom, ref, alt, expected, got, strand string
+		pos                                    int64
+	}
+
+	delSamples := make([]sample, 0, 30)
+	insSamples := make([]sample, 0, 30)
+	var delMatch, delTotal, insMatch, insTotal int
+	var delFwdFail, delRevFail, insFwdFail, insRevFail int
+
+	for _, e := range entries {
+		class := inferConsequenceClass(e.Protein)
+		if class != "inframe_deletion" && class != "inframe_insertion" {
+			continue
+		}
+		v := &vcf.Variant{Chrom: e.Chrom, Pos: e.Pos, Ref: e.Ref, Alt: e.Alt}
+		anns, _ := ann.Annotate(v)
+		best := output.PickBestAnnotation(anns)
+		got := ""
+		strand := "?"
+		if best != nil {
+			got = best.HGVSp
+			if tr := cache.GetTranscript(best.TranscriptID); tr != nil {
+				if tr.IsForwardStrand() {
+					strand = "+"
+				} else {
+					strand = "-"
+				}
+			}
+		}
+
+		switch class {
+		case "inframe_deletion":
+			delTotal++
+			if got == e.Protein {
+				delMatch++
+			} else {
+				if strand == "+" {
+					delFwdFail++
+				} else {
+					delRevFail++
+				}
+				if len(delSamples) < 30 {
+					delSamples = append(delSamples, sample{e.Chrom, e.Ref, e.Alt, e.Protein, got, strand, e.Pos})
+				}
+			}
+		case "inframe_insertion":
+			insTotal++
+			if got == e.Protein {
+				insMatch++
+			} else {
+				if strand == "+" {
+					insFwdFail++
+				} else {
+					insRevFail++
+				}
+				if len(insSamples) < 30 {
+					insSamples = append(insSamples, sample{e.Chrom, e.Ref, e.Alt, e.Protein, got, strand, e.Pos})
+				}
+			}
+		}
+	}
+
+	t.Logf("Inframe deletion: %d/%d match (%.1f%%)", delMatch, delTotal, 100*float64(delMatch)/float64(delTotal))
+	t.Logf("  Failures: + strand=%d, - strand=%d", delFwdFail, delRevFail)
+	t.Logf("Inframe deletion mismatches (first %d):", len(delSamples))
+	for _, s := range delSamples {
+		t.Logf("  [%s] %s:%d %s>%s  expected=%q  got=%q", s.strand, s.chrom, s.pos, s.ref, s.alt, s.expected, s.got)
+	}
+	t.Logf("")
+	t.Logf("Inframe insertion: %d/%d match (%.1f%%)", insMatch, insTotal, 100*float64(insMatch)/float64(insTotal))
+	t.Logf("  Failures: + strand=%d, - strand=%d", insFwdFail, insRevFail)
+	t.Logf("Inframe insertion mismatches (first %d):", len(insSamples))
+	for _, s := range insSamples {
+		t.Logf("  [%s] %s:%d %s>%s  expected=%q  got=%q", s.strand, s.chrom, s.pos, s.ref, s.alt, s.expected, s.got)
+	}
+}
+
 // TestFrameshiftSingleVariantDebug traces internal state for a known failing case.
 func TestFrameshiftSingleVariantDebug(t *testing.T) {
 	c, _, _ := loadClinVarCache(t)
@@ -1048,6 +1142,107 @@ func TestFrameshiftSingleVariantDebug(t *testing.T) {
 			t.Logf("transcript=%s strand=%s HGVSp=%s CDSpos=%d proteinPos=%d",
 				a.TranscriptID, strand, a.HGVSp, a.CDSPosition, a.ProteinPosition)
 		}
+	}
+}
+
+// TestNotAnnotatedDebug investigates variants where vibe-vep returns no HGVSp
+// to understand and categorize the root causes.
+func TestNotAnnotatedDebug(t *testing.T) {
+	summaryPath := filepath.Join(os.Getenv("HOME"), ".vibe-vep", "clinvar", "variant_summary.txt.gz")
+	if _, err := os.Stat(summaryPath); err != nil {
+		t.Skipf("ClinVar summary not found — run scripts/prepare_clinvar.sh first")
+	}
+	entries, err := clv.ParseSummaryFile(summaryPath)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	entries = deduplicateEntries(entries)
+
+	c, _, _ := loadClinVarCache(t)
+	ann := annotate.NewAnnotator(c)
+
+	type sample struct {
+		chrom, ref, alt, expected string
+		pos                       int64
+		bestConseq                string
+		reason                    string
+	}
+
+	classCounts := make(map[string]int)   // expected class → count
+	reasonCounts := make(map[string]int)  // reason → count
+	var samples []sample
+	const maxSamples = 50
+
+	for _, e := range entries {
+		v := &vcf.Variant{Chrom: e.Chrom, Pos: e.Pos, Ref: e.Ref, Alt: e.Alt}
+		anns, _ := ann.Annotate(v)
+		best := output.PickBestAnnotation(anns)
+
+		var isNotAnnotated bool
+		var bestConseq, reason string
+
+		if best == nil {
+			isNotAnnotated = true
+			reason = "no_transcript"
+		} else if best.HGVSp == "" {
+			isNotAnnotated = true
+			bestConseq = best.Consequence
+			switch {
+			case strings.Contains(best.Consequence, "intron"):
+				reason = "intron"
+			case strings.Contains(best.Consequence, "splice"):
+				reason = "splice"
+			case strings.Contains(best.Consequence, "UTR"):
+				reason = "UTR"
+			case strings.Contains(best.Consequence, "upstream") || strings.Contains(best.Consequence, "downstream"):
+				reason = "intergenic"
+			case strings.Contains(best.Consequence, "synonymous"):
+				reason = "synonymous"
+			case best.Consequence == "":
+				reason = "empty_consequence"
+			default:
+				reason = "other:" + best.Consequence
+			}
+		}
+
+		if !isNotAnnotated {
+			continue
+		}
+
+		expClass := inferConsequenceClass(e.Protein)
+		classCounts[expClass]++
+		reasonCounts[reason]++
+
+		if len(samples) < maxSamples {
+			samples = append(samples, sample{
+				chrom:      e.Chrom,
+				pos:        e.Pos,
+				ref:        e.Ref,
+				alt:        e.Alt,
+				expected:   e.Protein,
+				bestConseq: bestConseq,
+				reason:     reason,
+			})
+		}
+	}
+
+	total := 0
+	for _, c := range classCounts {
+		total += c
+	}
+	t.Logf("Total not-annotated (HGVSp empty): %d", total)
+	t.Logf("By expected class:")
+	for class, cnt := range classCounts {
+		t.Logf("  %-25s: %d (%.1f%%)", class, cnt, 100*float64(cnt)/float64(total))
+	}
+	t.Logf("By reason vibe-vep gives no HGVSp:")
+	for reason, cnt := range reasonCounts {
+		t.Logf("  %-30s: %d (%.1f%%)", reason, cnt, 100*float64(cnt)/float64(total))
+	}
+	t.Logf("Sample not-annotated variants (first %d):", len(samples))
+	for _, s := range samples {
+		t.Logf("  %s:%d %s>%s  expected=%q  bestConseq=%q  reason=%s",
+			s.chrom, s.pos, s.ref, s.alt, s.expected, s.bestConseq, s.reason)
 	}
 }
 
