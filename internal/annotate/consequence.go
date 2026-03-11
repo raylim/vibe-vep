@@ -141,7 +141,9 @@ func PredictConsequence(v *vcf.Variant, t *cache.Transcript) *ConsequenceResult 
 			}
 			if indelEnd >= startCodonStart && v.Pos <= startCodonEnd {
 				result.Consequence = ConsequenceStartLost
+				result.ProteinPosition = 1
 				result.Impact = GetImpact(result.Consequence)
+				result.HGVSp = FormatHGVSp(result)
 				return result
 			}
 			// Check if deletion from 3'UTR spans into the stop codon
@@ -177,7 +179,9 @@ func PredictConsequence(v *vcf.Variant, t *cache.Transcript) *ConsequenceResult 
 		}
 		if indelEnd >= startCodonStart && v.Pos <= startCodonEnd {
 			result.Consequence = ConsequenceStartLost
+			result.ProteinPosition = 1
 			result.Impact = GetImpact(result.Consequence)
+			result.HGVSp = FormatHGVSp(result)
 			return result
 		}
 	}

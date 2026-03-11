@@ -30,14 +30,21 @@ func formatAASequence(aas string) string {
 //
 // Uses a stack-allocated buffer for common short cases to minimize allocations.
 func FormatHGVSp(result *ConsequenceResult) string {
-	if result.ProteinPosition < 1 {
-		return ""
-	}
-
 	// Get the primary consequence (first term before comma)
 	conseq := result.Consequence
 	if idx := strings.IndexByte(conseq, ','); idx >= 0 {
 		conseq = conseq[:idx]
+	}
+
+	// start_lost is always p.Met1? regardless of position; handle before the
+	// ProteinPosition guard to be robust against early-return code paths that
+	// may not set ProteinPosition.
+	if conseq == ConsequenceStartLost {
+		return "p.Met1?"
+	}
+
+	if result.ProteinPosition < 1 {
+		return ""
 	}
 
 	pos := result.ProteinPosition
@@ -101,9 +108,6 @@ func FormatHGVSp(result *ConsequenceResult) string {
 			n += copy(buf[n:], "ext*?")
 		}
 		return string(buf[:n])
-
-	case ConsequenceStartLost:
-		return "p.Met1?"
 
 	case ConsequenceStopRetained:
 		// p.Ter###=
