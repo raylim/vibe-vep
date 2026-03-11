@@ -544,17 +544,13 @@ func computeFrameshiftDetails(v *vcf.Variant, t *cache.Transcript, cdsPos int64)
 		alt = ReverseComplement(alt)
 	}
 
-	// For reverse-strand deletions the VCF anchor is the 3'-most (highest CDS
-	// index) base of the ref; the deleted bases lie at lower CDS positions
-	// (before the anchor in CDS space).  Shift startIdx left so that the
-	// mutant splice removes the correct bases.
-	//
-	// For forward-strand deletions (and all insertions / SNVs) the anchor is
-	// already at the 5' end of the ref, so startIdx == cdsIdx.
+	// For reverse-strand variants, GenomicToCDS(v.Pos) maps the leftmost
+	// genomic position to the HIGHEST CDS index (the last ref base on the
+	// transcript).  Shift startIdx left by len(ref)-1 so that it points to
+	// the first ref base in CDS space.
 	startIdx := cdsIdx
-	if t.IsReverseStrand() && len(ref) > len(alt) {
-		delLen := len(ref) - len(alt)
-		startIdx -= delLen
+	if t.IsReverseStrand() && len(ref) > 1 {
+		startIdx -= len(ref) - 1
 		if startIdx < 0 {
 			startIdx = 0
 		}
@@ -643,12 +639,14 @@ func computeInframeProteinChange(v *vcf.Variant, t *cache.Transcript, cdsPos int
 		alt = ReverseComplement(alt)
 	}
 
-	// For reverse-strand deletions, the VCF anchor sits at the HIGHEST CDS
-	// index (leftmost genomic = rightmost CDS). Shift startIdx left so that
-	// we remove the actual deleted bases rather than the anchor-and-beyond.
+	// For reverse-strand variants, GenomicToCDS(v.Pos) maps the leftmost
+	// genomic position to the HIGHEST CDS index (the last ref base on the
+	// transcript).  For any multi-base ref we must shift cdsIdx left by
+	// len(ref)-1 so that it points to the FIRST ref base.  This applies to
+	// insertions, deletions, and complex substitutions uniformly.
 	cdsIdx := int(cdsPos - 1)
-	if t.IsReverseStrand() && len(ref) > len(alt) {
-		cdsIdx -= len(ref) - len(alt)
+	if t.IsReverseStrand() && len(ref) > 1 {
+		cdsIdx -= len(ref) - 1
 		if cdsIdx < 0 {
 			cdsIdx = 0
 		}
