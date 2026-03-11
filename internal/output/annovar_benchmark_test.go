@@ -81,9 +81,12 @@ func convertANNOVARProtein(p string) string {
 			// Don't convert if previous char is lowercase — mid-word in a keyword
 			// like "ins", "del", "dup", "fs".
 			prevIsLower := i > 0 && body[i-1] >= 'a' && body[i-1] <= 'z'
+			// Exception: uppercase AA immediately after a keyword ending ("ins", "del", "dup")
+			// represents an inserted/substituted amino acid, e.g. insS → insSer.
+			prevIsKeywordEnd := prevIsLower && i >= 3 && (body[i-3:i] == "ins" || body[i-3:i] == "del" || body[i-3:i] == "dup")
 
 			shouldConvert := nextIsDigit || prevIsDigit || atEnd || nextIsUpperAA || prevIsUnderscore
-			if prevIsLower {
+			if prevIsLower && !prevIsKeywordEnd {
 				shouldConvert = false
 			}
 
