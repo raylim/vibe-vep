@@ -39,6 +39,7 @@ is identical to the version used by GENCODE v49 / Ensembl 115 annotation tools.
 | vibe-vep | 87.4% | 95.9% | 1508 |
 | snpEff GRCh38.115 | 82.5% | 95.9% | 318 |
 | Ensembl VEP v115 | 79.8% | 96.2% | 837 |
+| ANNOVAR hg38 refGeneWithVer | 64.8% | 95.4% | 21 |
 
 ### Protein HGVS Match by Variant Type
 
@@ -47,6 +48,7 @@ is identical to the version used by GENCODE v49 / Ensembl 115 annotation tools.
 | vibe-vep | 90.2% | 83.3% |
 | snpEff GRCh38.115 | 85.1% | 78.6% |
 | Ensembl VEP v115 | 81.2% | 77.6% |
+| ANNOVAR hg38 refGeneWithVer | 69.0% | 58.6% |
 
 ### Protein HGVS Match (MANE Select transcripts only, n=231858)
 
@@ -58,6 +60,7 @@ _the same transcript, so protein notation differences reflect real errors._
 | vibe-vep | 87.5% |
 | snpEff GRCh38.115 | 82.5% |
 | Ensembl VEP v115 | 79.8% |
+| ANNOVAR hg38 refGeneWithVer | 64.8% |
 
 ### Protein HGVS Match (Version-exact subset, n=231699)
 
@@ -70,8 +73,7 @@ _making this the most meaningful accuracy signal: failures are true algorithmic 
 | vibe-vep | 87.5% | 95.9% |
 | snpEff GRCh38.115 | 82.5% | 96.0% |
 | Ensembl VEP v115 | 79.8% | 96.3% |
-
-### HGVSp Match by Consequence Class
+| ANNOVAR hg38 refGeneWithVer | 64.8% | 95.4% |
 
 _"Best" = primary transcript; "Any" = correct answer exists in any annotated transcript._
 _snpEff and VEP annotate all transcripts, so "any" reveals whether the right answer is present_
@@ -118,7 +120,7 @@ _`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._
 
 | Tool | Variants | Time | Rate |
 |------|----------|------|------|
-| vibe-vep | 232008 | 10.0s | 23226 v/s |
+| vibe-vep | 232008 | 9.9s | 23345 v/s |
 | snpEff GRCh38.115 | 232008 | 452s | 513 v/s |
 | Ensembl VEP v115 | 232008 | 1333s | 174 v/s |
 | ANNOVAR hg38 refGeneWithVer | 232008 | 1538s | 151 v/s |

@@ -844,6 +844,10 @@ func writeClinVarReport(
 		fmt.Fprintf(w, "| Ensembl VEP v115 | %s | %s | %d |\n",
 			pct(vep.exactMatch, vep.total), pct(vep.anyMatch, vep.total), vep.notAnnotated)
 	}
+	if hasAnnovar {
+		fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %s | %s | %d |\n",
+			pct(annovar.exactMatch, annovar.total), pct(annovar.anyMatch, annovar.total), annovar.notAnnotated)
+	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Protein HGVS Match by Variant Type\n\n")
 	fmt.Fprintf(w, "| Tool | SNV (n=%d) | Indel (n=%d) |\n", snvCount, indelCount)
@@ -854,6 +858,9 @@ func writeClinVarReport(
 	}
 	if hasVEP {
 		fmt.Fprintf(w, "| Ensembl VEP v115 | %s | %s |\n", pct(vep.snvExact, vep.snvTotal), pct(vep.indelExact, vep.indelTotal))
+	}
+	if hasAnnovar {
+		fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %s | %s |\n", pct(annovar.snvExact, annovar.snvTotal), pct(annovar.indelExact, annovar.indelTotal))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Protein HGVS Match (MANE Select transcripts only, n=%d)\n\n", maneCount)
@@ -866,6 +873,9 @@ func writeClinVarReport(
 	}
 	if hasVEP {
 		fmt.Fprintf(w, "| Ensembl VEP v115 | %s |\n", pct(vep.maneExact, vep.maneTotal))
+	}
+	if hasAnnovar {
+		fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %s |\n", pct(annovar.maneExact, annovar.maneTotal))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Protein HGVS Match (Version-exact subset, n=%d)\n\n", maneVersionExactCount)
@@ -886,8 +896,12 @@ func writeClinVarReport(
 			pct(vep.versionExactMatch, vep.versionExactTotal),
 			pct(vep.versionExactAny, vep.versionExactTotal))
 	}
+	if hasAnnovar {
+		fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %s | %s |\n",
+			pct(annovar.versionExactMatch, annovar.versionExactTotal),
+			pct(annovar.versionExactAny, annovar.versionExactTotal))
+	}
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "### HGVSp Match by Consequence Class\n\n")
 	fmt.Fprintf(w, "_\"Best\" = primary transcript; \"Any\" = correct answer exists in any annotated transcript._\n")
 	fmt.Fprintf(w, "_snpEff and VEP annotate all transcripts, so \"any\" reveals whether the right answer is present_\n")
 	fmt.Fprintf(w, "_but not selected as primary (transcript-choice errors). vibe-vep only reports MANE/canonical._\n\n")
