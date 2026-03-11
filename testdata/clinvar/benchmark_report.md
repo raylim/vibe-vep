@@ -31,7 +31,7 @@ making cross-tool HGVSp comparison directly meaningful.
 
 | Tool | HGVSp Match (best) | HGVSp Match (any) | Not Annotated |
 |------|--------------------|-------------------|---------------|
-| vibe-vep | 87.3% | 95.5% | 2583 |
+| vibe-vep | 87.4% | 95.9% | 1508 |
 | snpEff GRCh38.115 | 82.5% | 95.9% | 318 |
 | Ensembl VEP v115 | 79.8% | 96.2% | 837 |
 
@@ -39,7 +39,7 @@ making cross-tool HGVSp comparison directly meaningful.
 
 | Tool | SNV (n=139222) | Indel (n=92786) |
 |------|-----------|-------------|
-| vibe-vep | 90.0% | 83.2% |
+| vibe-vep | 90.2% | 83.3% |
 | snpEff GRCh38.115 | 85.1% | 78.6% |
 | Ensembl VEP v115 | 81.2% | 77.6% |
 
@@ -50,7 +50,7 @@ _the same transcript, so protein notation differences reflect real errors._
 
 | Tool | HGVSp Match |
 |------|-------------|
-| vibe-vep | 87.4% |
+| vibe-vep | 87.5% |
 | snpEff GRCh38.115 | 82.5% |
 | Ensembl VEP v115 | 79.8% |
 
@@ -62,12 +62,12 @@ _but not selected as primary (transcript-choice errors). vibe-vep only reports M
 
 | Class | n | vibe-vep best | vibe-vep any | snpEff best | snpEff any | VEP best | VEP any |
 |-------|---|--------------|--------------|-------------|------------|----------|---------|
-| missense | 69516 | 91.1% | 96.8% | 86.0% | 97.2% | 80.8% | 97.2% |
-| frameshift | 83151 | 88.4% | 98.2% | 84.1% | 99.7% | 82.3% | 99.6% |
-| stop_gained | 75508 | 82.9% | 91.8% | 78.9% | 92.3% | 77.3% | 93.2% |
-| inframe_del | 2019 | 86.9% | 92.4% | 82.1% | 94.9% | 78.3% | 94.9% |
-| inframe_ins | 748 | 83.2% | 91.0% | 60.6% | 70.7% | 71.5% | 86.5% |
-| synonymous | 815 | 89.6% | 98.7% | 0.0% | 0.0% | 0.0% | 0.0% |
+| missense | 69516 | 91.3% | 97.2% | 86.0% | 97.2% | 80.8% | 97.2% |
+| frameshift | 83151 | 88.5% | 98.5% | 84.1% | 99.7% | 82.3% | 99.6% |
+| stop_gained | 75508 | 83.1% | 92.1% | 78.9% | 92.3% | 77.3% | 93.2% |
+| inframe_del | 2019 | 86.8% | 92.8% | 82.1% | 94.9% | 78.3% | 94.9% |
+| inframe_ins | 748 | 83.3% | 91.4% | 60.6% | 70.7% | 71.5% | 86.5% |
+| synonymous | 815 | 89.8% | 99.3% | 0.0% | 0.0% | 0.0% | 0.0% |
 
 ### Consequence Class Match
 
@@ -77,7 +77,7 @@ _`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._
 
 | Tool | Consequence Match |
 |------|-------------------|
-| vibe-vep | 97.3% |
+| vibe-vep | 97.7% |
 | snpEff GRCh38.115 | 97.0% |
 | Ensembl VEP v115 | 96.9% |
 
@@ -85,7 +85,7 @@ _`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._
 
 | Tool | Variants | Time | Rate |
 |------|----------|------|------|
-| vibe-vep | 232008 | 10.1s | 22904 v/s |
+| vibe-vep | 232008 | 10.3s | 22595 v/s |
 | snpEff GRCh38.115 | 232008 | 452s | 513 v/s |
 | Ensembl VEP v115 | 232008 | 1333s | 174 v/s |
 
@@ -115,27 +115,27 @@ Two HGVS notation variants are normalized before comparison:
 
 ### Breakdown by consequence class
 
-**Missense** (n=69516 ≈70k): vibe-vep 91.1%, snpEff 86.0%, VEP 80.8%.
+**Missense** (n=69516 ≈70k): vibe-vep 91.3%, snpEff 86.0%, VEP 80.8%.
 All three reach ~97% "any" match, confirming the differences are transcript-choice,
 not algorithmic. vibe-vep's MANE Select preference gives it the best primary match.
 
-**Stop-gained** (n=75508 ≈76k): vibe-vep 82.9%, snpEff 78.9%, VEP 77.3%.
+**Stop-gained** (n=75508 ≈76k): vibe-vep 83.1%, snpEff 78.9%, VEP 77.3%.
 "Any" match of 91–93% indicates the remainder are transcript-drift cases.
 
-**Frameshift** (n=83151 ≈83k): vibe-vep 88.4%, snpEff 84.1%, VEP 82.3%.
+**Frameshift** (n=83151 ≈83k): vibe-vep 88.5%, snpEff 84.1%, VEP 82.3%.
 snpEff and VEP both reach ~99.7% "any" match, meaning the correct answer
 exists in their multi-transcript output.
 
-**Inframe deletion** (n=2019 ≈2k): vibe-vep 86.9%, snpEff 82.1%, VEP 78.3%.
+**Inframe deletion** (n=2019 ≈2k): vibe-vep 86.8%, snpEff 82.1%, VEP 78.3%.
 The high snpEff/VEP "any" (~95%) suggests the protein is correctly computed
 but the position range notation (e.g., `p.Arg27_Ile28del`) is sensitive to
 exact codon boundary choice under different normalization rules.
 
-**Inframe insertion** (n=748 ≈750): vibe-vep 83.2%, snpEff 60.6%, VEP 71.5%.
+**Inframe insertion** (n=748 ≈750): vibe-vep 83.3%, snpEff 60.6%, VEP 71.5%.
 Insertion HGVSp notation is particularly complex
 (position-range, dup vs ins disambiguation) and requires further investigation.
 
-**Synonymous** (n=815 ≈815): vibe-vep 89.6%, snpEff 0.0%, VEP 0.0%.
+**Synonymous** (n=815 ≈815): vibe-vep 89.8%, snpEff 0.0%, VEP 0.0%.
 snpEff and VEP do not emit HGVSp for synonymous variants (silent change is not
 annotated in the protein-change field); vibe-vep outputs `p.Arg273=` notation.
 
