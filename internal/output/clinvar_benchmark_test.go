@@ -155,8 +155,27 @@ func TestClinVarBenchmark(t *testing.T) {
 		t.Log("VEP VCF not found — skipping VEP comparison")
 	}
 
+	annovarTxt := filepath.Join(clinvarDir, "annovar.txt.gz")
+	var annovarMap annovarVariantMap
+	var hasAnnovar bool
+	var annovarAnnoDur time.Duration
+	if _, err := os.Stat(annovarTxt); err == nil {
+		t.Log("Loading ANNOVAR annotations …")
+		avStart := time.Now()
+		annovarMap, err = loadAnnovarTxt(annovarTxt)
+		if err != nil {
+			t.Logf("  WARN: load ANNOVAR txt: %v", err)
+		} else {
+			t.Logf("  Loaded ANNOVAR annotations for %d positions (%.1fs)", len(annovarMap.byPos), time.Since(avStart).Seconds())
+			hasAnnovar = true
+		}
+		annovarAnnoDur = readElapsedFile(filepath.Join(clinvarDir, "annovar.elapsed"))
+	} else {
+		t.Log("ANNOVAR txt not found — skipping ANNOVAR comparison")
+	}
+
 	// Evaluate.
-	var vibe, snpEff, vep clinvarCounts
+	var vibe, snpEff, vep, annovar clinvarCounts
 
 	for i, e := range entries {
 		v := &vcf.Variant{
@@ -357,12 +376,78 @@ func TestClinVarBenchmark(t *testing.T) {
 				}
 			}
 		}
+
+		// --- ANNOVAR ---
+		if hasAnnovar {
+			avAnns := annovarMap.lookup(v)
+			annovar.total++
+			if isIndel {
+				annovar.indelTotal++
+			} else {
+				annovar.snvTotal++
+			}
+			if e.IsMANE {
+				annovar.maneTotal++
+			}
+			if e.IsMANEVersionExact {
+				annovar.versionExactTotal++
+			}
+			if len(avAnns) > 0 {
+				best := pickBestAnnovarByImpact(avAnns)
+				expClass := inferConsequenceClass(expected)
+				var bestExact, bestAny bool
+				if best != nil && best.hgvsp != "" {
+					bestExact = normalizeProteinStr(best.hgvsp) == normalizeProteinStr(expected)
+					if bestExact {
+						annovar.exactMatch++
+						if isIndel {
+							annovar.indelExact++
+						} else {
+							annovar.snvExact++
+						}
+						if e.IsMANE {
+							annovar.maneExact++
+						}
+						if e.IsMANEVersionExact {
+							annovar.versionExactMatch++
+						}
+					}
+					for _, a := range avAnns {
+						if normalizeProteinStr(a.hgvsp) == normalizeProteinStr(expected) {
+							bestAny = true
+							annovar.anyMatch++
+							if e.IsMANEVersionExact {
+								annovar.versionExactAny++
+							}
+							break
+						}
+					}
+					if !bestAny {
+						annovar.completeFail++
+					}
+					if expClass != "" {
+						annovar.consequTotal++
+						if consequenceMatches(annovarConsequenceToSO(best.exonicFunc), expClass) {
+							annovar.consequMatch++
+						}
+					}
+				} else {
+					annovar.notAnnotated++
+				}
+				if expClass != "" {
+					completeFail := best != nil && best.hgvsp != "" && !bestAny
+					annovar.trackClass(expClass, bestExact, bestAny, completeFail)
+				}
+			}
+		}
 	}
 
 	// Write report.
 	reportPath := filepath.Join(clinvarDir, "benchmark_report.md")
-	if err := writeClinVarReport(reportPath, entries, vibe, snpEff, vep, hasSnpEff, hasVEP,
-		vibeDur, vibeRate, cacheDur, cacheSource, snpEffAnnoDur, vepAnnoDur); err != nil {
+	if err := writeClinVarReport(reportPath, entries, vibe, snpEff, vep, annovar,
+		hasSnpEff, hasVEP, hasAnnovar,
+		vibeDur, vibeRate, cacheDur, cacheSource,
+		snpEffAnnoDur, vepAnnoDur, annovarAnnoDur); err != nil {
 		t.Logf("WARN: write report: %v", err)
 	} else {
 		t.Logf("Report written to %s", reportPath)
@@ -397,6 +482,13 @@ func TestClinVarBenchmark(t *testing.T) {
 			pct(vep.versionExactMatch, vep.versionExactTotal),
 			pct(vep.snvExact, vep.snvTotal), pct(vep.indelExact, vep.indelTotal))
 	}
+	if hasAnnovar {
+		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-17s  %-8s  %-10s", "ANNOVAR",
+			pct(annovar.exactMatch, annovar.total), pct(annovar.anyMatch, annovar.total),
+			pct(annovar.consequMatch, annovar.consequTotal), pct(annovar.maneExact, annovar.maneTotal),
+			pct(annovar.versionExactMatch, annovar.versionExactTotal),
+			pct(annovar.snvExact, annovar.snvTotal), pct(annovar.indelExact, annovar.indelTotal))
+	}
 }
 
 // classCounts holds per-consequence-class accuracy counts for one tool.
@@ -406,12 +498,12 @@ type classCounts struct {
 
 // clinvarCounts holds benchmark counts for one annotation tool.
 type clinvarCounts struct {
-	total, exactMatch, anyMatch, maneTotal, maneExact         int
-	versionExactTotal, versionExactMatch, versionExactAny     int
-	consequMatch, consequTotal, notAnnotated, completeFail     int
-	snvTotal, snvExact                                         int
-	indelTotal, indelExact                                     int
-	byClass                                                    map[string]*classCounts
+	total, exactMatch, anyMatch, maneTotal, maneExact      int
+	versionExactTotal, versionExactMatch, versionExactAny  int
+	consequMatch, consequTotal, notAnnotated, completeFail int
+	snvTotal, snvExact                                     int
+	indelTotal, indelExact                                 int
+	byClass                                                map[string]*classCounts
 }
 
 // trackClass records an observation for a consequence class.
@@ -437,6 +529,7 @@ func (c *clinvarCounts) trackClass(class string, exact, any, complete bool) {
 		cc.completeFail++
 	}
 }
+
 // Preference: MANE > higher-review-status > first seen.
 func deduplicateEntries(entries []clv.SummaryEntry) []clv.SummaryEntry {
 	type key struct {
@@ -674,11 +767,11 @@ func pickBestVEPByImpact(anns []vepAnnotation) *vepAnnotation {
 func writeClinVarReport(
 	path string,
 	entries []clv.SummaryEntry,
-	vibe, snpEff, vep clinvarCounts,
-	hasSnpEff, hasVEP bool,
+	vibe, snpEff, vep, annovar clinvarCounts,
+	hasSnpEff, hasVEP, hasAnnovar bool,
 	vibeDur time.Duration, vibeRate float64,
 	cacheDur time.Duration, cacheSource string,
-	snpEffAnnoDur, vepAnnoDur time.Duration,
+	snpEffAnnoDur, vepAnnoDur, annovarAnnoDur time.Duration,
 ) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -806,90 +899,113 @@ func writeClinVarReport(
 		{"inframe_insertion", "inframe_ins"},
 		{"synonymous", "synonymous"},
 	}
-	// Header
-	if hasSnpEff && hasVEP {
-		fmt.Fprintf(w, "| Class | n | vibe-vep best | vibe-vep any | snpEff best | snpEff any | VEP best | VEP any |\n")
-		fmt.Fprintf(w, "|-------|---|--------------|--------------|-------------|------------|----------|---------|\n")
-	} else if hasSnpEff {
-		fmt.Fprintf(w, "| Class | n | vibe-vep best | vibe-vep any | snpEff best | snpEff any |\n")
-		fmt.Fprintf(w, "|-------|---|--------------|--------------|-------------|------------|\n")
-	} else {
-		fmt.Fprintf(w, "| Class | n | vibe-vep best | vibe-vep any |\n")
-		fmt.Fprintf(w, "|-------|---|--------------|---------------|\n")
+	// Header — build based on available tools
+	{
+		headerCols := "| Class | n | vibe-vep best | vibe-vep any"
+		sepCols := "|-------|---|--------------|-------------|"
+		if hasSnpEff {
+			headerCols += " | snpEff best | snpEff any"
+			sepCols += "-------------|------------|"
+		}
+		if hasVEP {
+			headerCols += " | VEP best | VEP any"
+			sepCols += "----------|---------"
+		}
+		if hasAnnovar {
+			headerCols += " | ANNOVAR best | ANNOVAR any"
+			sepCols += "|-------------|------------|"
+		}
+		fmt.Fprintln(w, headerCols+" |")
+		fmt.Fprintln(w, sepCols+"|")
 	}
 	for _, cl := range classOrder {
 		vc := vibe.byClass[cl.id]
 		if vc == nil || vc.total == 0 {
 			continue
 		}
-		if hasSnpEff && hasVEP {
-			sc := snpEff.byClass[cl.id]
-			vc2 := vep.byClass[cl.id]
-			if sc == nil {
-				sc = &classCounts{}
-			}
-			if vc2 == nil {
-				vc2 = &classCounts{}
-			}
-			fmt.Fprintf(w, "| %s | %d | %s | %s | %s | %s | %s | %s |\n",
-				cl.label, vc.total,
-				pct(vc.exact, vc.total), pct(vc.any, vc.total),
-				pct(sc.exact, sc.total), pct(sc.any, sc.total),
-				pct(vc2.exact, vc2.total), pct(vc2.any, vc2.total))
-		} else if hasSnpEff {
-			sc := snpEff.byClass[cl.id]
-			if sc == nil {
-				sc = &classCounts{}
-			}
-			fmt.Fprintf(w, "| %s | %d | %s | %s | %s | %s |\n",
-				cl.label, vc.total,
-				pct(vc.exact, vc.total), pct(vc.any, vc.total),
-				pct(sc.exact, sc.total), pct(sc.any, sc.total))
-		} else {
-			fmt.Fprintf(w, "| %s | %d | %s | %s |\n",
-				cl.label, vc.total,
-				pct(vc.exact, vc.total), pct(vc.any, vc.total))
+		sc := snpEff.byClass[cl.id]
+		if sc == nil {
+			sc = &classCounts{}
 		}
+		vc2 := vep.byClass[cl.id]
+		if vc2 == nil {
+			vc2 = &classCounts{}
+		}
+		ac := annovar.byClass[cl.id]
+		if ac == nil {
+			ac = &classCounts{}
+		}
+		row := fmt.Sprintf("| %s | %d | %s | %s",
+			cl.label, vc.total,
+			pct(vc.exact, vc.total), pct(vc.any, vc.total))
+		if hasSnpEff {
+			row += fmt.Sprintf(" | %s | %s", pct(sc.exact, sc.total), pct(sc.any, sc.total))
+		}
+		if hasVEP {
+			row += fmt.Sprintf(" | %s | %s", pct(vc2.exact, vc2.total), pct(vc2.any, vc2.total))
+		}
+		if hasAnnovar {
+			row += fmt.Sprintf(" | %s | %s", pct(ac.exact, ac.total), pct(ac.any, ac.total))
+		}
+		fmt.Fprintln(w, row+" |")
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Failure Taxonomy by Consequence Class\n\n")
 	fmt.Fprintf(w, "_Each failure type is mutually exclusive. \"Any-not-best\" = correct HGVSp exists in a secondary_\n")
 	fmt.Fprintf(w, "_transcript (transcript selection error). \"Complete fail\" = no transcript has the correct HGVSp_\n")
 	fmt.Fprintf(w, "_(algorithmic error or ClinVar artifact). \"Not annotated\" = tool emits no protein change._\n\n")
-	if hasSnpEff && hasVEP {
-		fmt.Fprintf(w, "| Class | n | vibe: exact | any-not-best | complete | snpEff: exact | any-not-best | complete | VEP: exact | any-not-best | complete |\n")
-		fmt.Fprintf(w, "|-------|---|------------|--------------|----------|---------------|--------------|----------|------------|--------------|----------|\n")
-	} else {
-		fmt.Fprintf(w, "| Class | n | vibe: exact | any-not-best | complete fail |\n")
-		fmt.Fprintf(w, "|-------|---|------------|--------------|---------------|\n")
+	{
+		headerCols := "| Class | n | vibe: exact | any-not-best | complete"
+		sepCols := "|-------|---|------------|--------------|---------|"
+		if hasSnpEff {
+			headerCols += " | snpEff: exact | any-not-best | complete"
+			sepCols += "---------------|--------------|---------|"
+		}
+		if hasVEP {
+			headerCols += " | VEP: exact | any-not-best | complete"
+			sepCols += "------------|--------------|---------|"
+		}
+		if hasAnnovar {
+			headerCols += " | ANNOVAR: exact | any-not-best | complete"
+			sepCols += "----------------|--------------|---------|"
+		}
+		fmt.Fprintln(w, headerCols+" |")
+		fmt.Fprintln(w, sepCols+"|")
 	}
 	for _, cl := range classOrder {
 		vc := vibe.byClass[cl.id]
 		if vc == nil || vc.total == 0 {
 			continue
 		}
-		anyNotBest := vc.any - vc.exact
-		if hasSnpEff && hasVEP {
-			sc := snpEff.byClass[cl.id]
-			vc2 := vep.byClass[cl.id]
-			if sc == nil {
-				sc = &classCounts{}
-			}
-			if vc2 == nil {
-				vc2 = &classCounts{}
-			}
-			seAnyNotBest := sc.any - sc.exact
-			vepAnyNotBest := vc2.any - vc2.exact
-			fmt.Fprintf(w, "| %s | %d | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-				cl.label, vc.total,
-				pct(vc.exact, vc.total), pct(anyNotBest, vc.total), pct(vc.completeFail, vc.total),
-				pct(sc.exact, sc.total), pct(seAnyNotBest, sc.total), pct(sc.completeFail, sc.total),
-				pct(vc2.exact, vc2.total), pct(vepAnyNotBest, vc2.total), pct(vc2.completeFail, vc2.total))
-		} else {
-			fmt.Fprintf(w, "| %s | %d | %s | %s | %s |\n",
-				cl.label, vc.total,
-				pct(vc.exact, vc.total), pct(anyNotBest, vc.total), pct(vc.completeFail, vc.total))
+		sc := snpEff.byClass[cl.id]
+		if sc == nil {
+			sc = &classCounts{}
 		}
+		vc2 := vep.byClass[cl.id]
+		if vc2 == nil {
+			vc2 = &classCounts{}
+		}
+		ac := annovar.byClass[cl.id]
+		if ac == nil {
+			ac = &classCounts{}
+		}
+		anyNotBest := vc.any - vc.exact
+		row := fmt.Sprintf("| %s | %d | %s | %s | %s",
+			cl.label, vc.total,
+			pct(vc.exact, vc.total), pct(anyNotBest, vc.total), pct(vc.completeFail, vc.total))
+		if hasSnpEff {
+			seAnyNotBest := sc.any - sc.exact
+			row += fmt.Sprintf(" | %s | %s | %s", pct(sc.exact, sc.total), pct(seAnyNotBest, sc.total), pct(sc.completeFail, sc.total))
+		}
+		if hasVEP {
+			vepAnyNotBest := vc2.any - vc2.exact
+			row += fmt.Sprintf(" | %s | %s | %s", pct(vc2.exact, vc2.total), pct(vepAnyNotBest, vc2.total), pct(vc2.completeFail, vc2.total))
+		}
+		if hasAnnovar {
+			avAnyNotBest := ac.any - ac.exact
+			row += fmt.Sprintf(" | %s | %s | %s", pct(ac.exact, ac.total), pct(avAnyNotBest, ac.total), pct(ac.completeFail, ac.total))
+		}
+		fmt.Fprintln(w, row+" |")
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### Consequence Class Match\n\n")
@@ -903,6 +1019,9 @@ func writeClinVarReport(
 	}
 	if hasVEP {
 		fmt.Fprintf(w, "| Ensembl VEP v115 | %s |\n", pct(vep.consequMatch, vep.consequTotal))
+	}
+	if hasAnnovar {
+		fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %s |\n", pct(annovar.consequMatch, annovar.consequTotal))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "## Performance\n\n")
@@ -927,11 +1046,20 @@ func writeClinVarReport(
 			fmt.Fprintf(w, "| Ensembl VEP v115 | %d | — | — |\n", len(entries))
 		}
 	}
+	if hasAnnovar {
+		if annovarAnnoDur > 0 {
+			annovarRate := float64(len(entries)) / annovarAnnoDur.Seconds()
+			fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %d | %.0fs | %.0f v/s |\n",
+				len(entries), annovarAnnoDur.Seconds(), annovarRate)
+		} else {
+			fmt.Fprintf(w, "| ANNOVAR hg38 refGeneWithVer | %d | — | — |\n", len(entries))
+		}
+	}
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "_vibe-vep cache load: %.1fs from %s. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._\n\n",
+	fmt.Fprintf(w, "_vibe-vep cache load: %.1fs from %s. snpEff/VEP/ANNOVAR times from `*.elapsed` sidecar written by annotation scripts._\n\n",
 		cacheDur.Seconds(), cacheSource)
-	if !hasSnpEff && !hasVEP {
-		fmt.Fprintf(w, "_snpEff and VEP results not available. Run `run_snpeff_clinvar.sh` and `run_vep_clinvar.sh`._\n\n")
+	if !hasSnpEff && !hasVEP && !hasAnnovar {
+		fmt.Fprintf(w, "_snpEff, VEP, and ANNOVAR results not available. Run the annotation scripts first._\n\n")
 	}
 	fmt.Fprintf(w, "## Interpretation\n\n")
 	fmt.Fprintf(w, "Unlike the TCGA benchmark (where ground truth is VEP-annotated),\n")
@@ -996,6 +1124,7 @@ func writeClinVarReport(
 		vc := vibe.byClass[ci.id]
 		sc := snpEff.byClass[ci.id]
 		vc2 := vep.byClass[ci.id]
+		ac := annovar.byClass[ci.id]
 		vibeStr := "n/a"
 		var vibeAnyNotBest, vibeComplete int
 		if vc != nil {
@@ -1011,12 +1140,16 @@ func writeClinVarReport(
 		if vc2 != nil && hasVEP {
 			vepStr = pct(vc2.exact, vc2.total)
 		}
+		annovarStr := "n/a"
+		if ac != nil && hasAnnovar {
+			annovarStr = pct(ac.exact, ac.total)
+		}
 		totalStr := ci.approxN
 		if vc != nil {
 			totalStr = "n=" + strconv.Itoa(vc.total) + " " + ci.approxN
 		}
-		fmt.Fprintf(w, "**%s** (%s): vibe-vep %s, snpEff %s, VEP %s",
-			ci.label, totalStr, vibeStr, snpEffStr, vepStr)
+		fmt.Fprintf(w, "**%s** (%s): vibe-vep %s, snpEff %s, VEP %s, ANNOVAR %s",
+			ci.label, totalStr, vibeStr, snpEffStr, vepStr, annovarStr)
 		if vc != nil {
 			fmt.Fprintf(w, " (any-not-best %s, complete-fail %s)",
 				pct(vibeAnyNotBest, vc.total), pct(vibeComplete, vc.total))
@@ -1038,13 +1171,17 @@ func writeClinVarReport(
 	if hasVEP {
 		vepAnyNotBestPct = 100 * float64(vep.anyMatch-vep.exactMatch) / float64(vep.total)
 	}
+	avAnyNotBestPct := 0.0
+	if hasAnnovar {
+		avAnyNotBestPct = 100 * float64(annovar.anyMatch-annovar.exactMatch) / float64(annovar.total)
+	}
 	fmt.Fprintf(w, "### Failure type summary\n\n")
 	fmt.Fprintf(w, "Three distinct failure types account for all mismatches:\n\n")
-	fmt.Fprintf(w, "- **Any-not-best** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP): "+
+	fmt.Fprintf(w, "- **Any-not-best** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP / %.1f%% ANNOVAR): "+
 		"The correct HGVSp exists in a secondary transcript. Primary cause: transcript prioritization —\n"+
 		"  ClinVar submissions often pre-date MANE Select and use historical NM_ transcripts.\n"+
 		"  vibe-vep prefers MANE/canonical; snpEff and VEP rank by impact tier.\n\n",
-		vibeAnyNotBestPct, seAnyNotBestPct, vepAnyNotBestPct)
+		vibeAnyNotBestPct, seAnyNotBestPct, vepAnyNotBestPct, avAnyNotBestPct)
 	vibeCompletePct := 100 * float64(vibe.completeFail) / float64(vibe.total)
 	seCompletePct := 0.0
 	if hasSnpEff {
@@ -1054,7 +1191,11 @@ func writeClinVarReport(
 	if hasVEP {
 		vepCompletePct = 100 * float64(vep.completeFail) / float64(vep.total)
 	}
-	fmt.Fprintf(w, "- **Complete fail** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP): "+
+	avCompletePct := 0.0
+	if hasAnnovar {
+		avCompletePct = 100 * float64(annovar.completeFail) / float64(annovar.total)
+	}
+	fmt.Fprintf(w, "- **Complete fail** (%.1f%% vibe / %.1f%% snpEff / %.1f%% VEP / %.1f%% ANNOVAR): "+
 		"No transcript has the expected HGVSp.\n"+
 		"  Failure origin varies by consequence class:\n"+
 		"  - **stop_gained / missense** (94–100%% all-tools-fail): ClinVar format artifacts — "+
@@ -1063,11 +1204,15 @@ func writeClinVarReport(
 		"    suffix instead of frameshift HGVSp; fixable by improving splice/frameshift priority.\n"+
 		"  - **inframe_deletion** (96%% vibe-specific): stop-creating deletions misclassified as\n"+
 		"    stop_gained; fixable by preserving inframe_deletion classification when reading frame is intact.\n\n",
-		vibeCompletePct, seCompletePct, vepCompletePct)
-	fmt.Fprintf(w, "- **Not annotated** (%d vibe / %d snpEff / %d VEP): "+
+		vibeCompletePct, seCompletePct, vepCompletePct, avCompletePct)
+	notAnnoStr := fmt.Sprintf("%d vibe / %d snpEff / %d VEP", vibe.notAnnotated, snpEff.notAnnotated, vep.notAnnotated)
+	if hasAnnovar {
+		notAnnoStr += fmt.Sprintf(" / %d ANNOVAR", annovar.notAnnotated)
+	}
+	fmt.Fprintf(w, "- **Not annotated** (%s): "+
 		"Tool emits no protein change (annotates as splice, intron, UTR, etc.).\n"+
 		"  Often genuine variant effect disagreement or boundary-condition variants.\n\n",
-		vibe.notAnnotated, snpEff.notAnnotated, vep.notAnnotated)
+		notAnnoStr)
 
 	return w.Flush()
 }
@@ -1344,8 +1489,8 @@ func TestNotAnnotatedDebug(t *testing.T) {
 		reason                    string
 	}
 
-	classCounts := make(map[string]int)   // expected class → count
-	reasonCounts := make(map[string]int)  // reason → count
+	classCounts := make(map[string]int)  // expected class → count
+	reasonCounts := make(map[string]int) // reason → count
 	var samples []sample
 	const maxSamples = 50
 
@@ -1505,7 +1650,7 @@ func TestComputationalDifferences(t *testing.T) {
 
 	// Track complete failures and their patterns.
 	patternCounts := make(map[string]map[string]int) // class → pattern → count
-	allToolsFailCount := make(map[string]int)         // class → all-tools-fail count
+	allToolsFailCount := make(map[string]int)        // class → all-tools-fail count
 	var samplesByClass = make(map[string][]failureEntry)
 	const maxSamples = 10
 
