@@ -323,15 +323,23 @@ func annovarImpactRank(exonicFunc string) int {
 }
 
 // pickBestAnnovarByImpact returns the highest-impact ANNOVAR annotation
-// that has a non-empty HGVSp.
-func pickBestAnnovarByImpact(anns []annovarAnnotation) *annovarAnnotation {
+// that has a non-empty HGVSp. Among equal-impact annotations, MANE Select
+// transcripts are preferred. hasMANE reports whether a transcript accession
+// (versioned or bare) is a MANE Select transcript.
+func pickBestAnnovarByImpact(anns []annovarAnnotation, hasMANE func(string) bool) *annovarAnnotation {
 	var best *annovarAnnotation
 	for i := range anns {
 		a := &anns[i]
 		if a.hgvsp == "" {
 			continue
 		}
-		if best == nil || annovarImpactRank(a.exonicFunc) > annovarImpactRank(best.exonicFunc) {
+		if best == nil {
+			best = a
+			continue
+		}
+		rankA := annovarImpactRank(a.exonicFunc)
+		rankBest := annovarImpactRank(best.exonicFunc)
+		if rankA > rankBest || (rankA == rankBest && hasMANE(a.transcript) && !hasMANE(best.transcript)) {
 			best = a
 		}
 	}

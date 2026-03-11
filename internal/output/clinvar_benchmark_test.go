@@ -393,7 +393,7 @@ func TestClinVarBenchmark(t *testing.T) {
 				annovar.versionExactTotal++
 			}
 			if len(avAnns) > 0 {
-				best := pickBestAnnovarByImpact(avAnns)
+				best := pickBestAnnovarByImpact(avAnns, maneMap.HasRefSeq)
 				expClass := inferConsequenceClass(expected)
 				var bestExact, bestAny bool
 				if best != nil && best.hgvsp != "" {
