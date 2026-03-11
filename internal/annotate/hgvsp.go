@@ -49,6 +49,22 @@ func FormatHGVSp(result *ConsequenceResult) string {
 
 	switch conseq {
 	case ConsequenceMissenseVariant:
+		if result.IsDelIns {
+			// Multi-codon MNV: p.AA1pos[_AA2endPos]delins[newAAs]
+			n += copy(buf[n:], "p.")
+			if result.RefAA != 0 {
+				n += copy(buf[n:], aaThree(result.RefAA))
+			}
+			n += putInt64(buf[n:], pos)
+			if result.ProteinEndPosition > result.ProteinPosition && result.EndAA != 0 {
+				buf[n] = '_'
+				n++
+				n += copy(buf[n:], aaThree(result.EndAA))
+				n += putInt64(buf[n:], result.ProteinEndPosition)
+			}
+			n += copy(buf[n:], "delins")
+			return string(buf[:n]) + formatAASequence(result.InsertedAAs)
+		}
 		// p.Xxx###Xxx (max ~15 chars)
 		n += copy(buf[n:], "p.")
 		n += copy(buf[n:], aaThree(result.RefAA))

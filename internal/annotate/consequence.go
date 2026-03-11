@@ -214,6 +214,12 @@ func predictCodingConsequence(v *vcf.Variant, t *cache.Transcript, exon *cache.E
 		return predictIndelConsequence(v, t, result)
 	}
 
+	// Multi-nucleotide variants (len(ref)==len(alt)>1) may span multiple
+	// codons and need special handling.
+	if len(v.Ref) > 1 {
+		return predictMNVConsequence(v, t, result)
+	}
+
 	// SNV - calculate amino acid change
 	if len(t.CDSSequence) == 0 {
 		// No CDS sequence available, can't determine AA change
@@ -276,7 +282,58 @@ func predictCodingConsequence(v *vcf.Variant, t *cache.Transcript, exon *cache.E
 	return result
 }
 
-// predictIndelConsequence determines the effect of an insertion or deletion.
+// predictMNVConsequence handles multi-nucleotide variants (len(ref)==len(alt)>1)
+// that may affect multiple codons. Single-codon changes are classified as
+// missense/stop/synonymous; multi-codon changes are emitted as delins.
+func predictMNVConsequence(v *vcf.Variant, t *cache.Transcript, result *ConsequenceResult) *ConsequenceResult {
+	if len(t.CDSSequence) == 0 {
+		result.Consequence = ConsequenceCodingSequenceVariant
+		result.Impact = GetImpact(result.Consequence)
+		return result
+	}
+
+	startPos, _, deletedAAs, insertedAAs := computeInframeProteinChange(v, t, result.CDSPosition)
+
+	switch {
+	case startPos == 0 || (len(deletedAAs) == 0 && len(insertedAAs) == 0):
+		result.Consequence = ConsequenceSynonymousVariant
+
+	case len(deletedAAs) == 1 && len(insertedAAs) == 1:
+		result.ProteinPosition = startPos
+		result.RefAA = deletedAAs[0]
+		result.AltAA = insertedAAs[0]
+		switch {
+		case result.AltAA == '*':
+			result.Consequence = ConsequenceStopGained
+			result.AminoAcidChange = formatAAChange(result.RefAA, startPos, '*')
+		case result.RefAA == '*':
+			result.Consequence = ConsequenceStopLost
+		case result.RefAA == 'M' && startPos == 1:
+			result.Consequence = ConsequenceStartLost
+		default:
+			result.Consequence = ConsequenceMissenseVariant
+			result.AminoAcidChange = formatAAChange(result.RefAA, startPos, result.AltAA)
+		}
+
+	default:
+		// Multi-codon change: emit as delins.
+		result.Consequence = ConsequenceMissenseVariant
+		result.IsDelIns = true
+		result.ProteinPosition = startPos
+		result.RefAA = deletedAAs[0]
+		result.InsertedAAs = insertedAAs
+		if len(deletedAAs) > 1 {
+			result.ProteinEndPosition = startPos + int64(len(deletedAAs)) - 1
+			result.EndAA = deletedAAs[len(deletedAAs)-1]
+		}
+	}
+
+	result.Impact = GetImpact(result.Consequence)
+	result.HGVSp = FormatHGVSp(result)
+	return result
+}
+
+
 func predictIndelConsequence(v *vcf.Variant, t *cache.Transcript, result *ConsequenceResult) *ConsequenceResult {
 	refLen := len(v.Ref)
 	altLen := len(v.Alt)
