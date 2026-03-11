@@ -1,54 +1,53 @@
 # GRCh37 Validation Report
 
-Generated: 2026-03-10 16:08 UTC  
+Generated: 2026-03-11 02:52 UTC  
 Assembly: GRCh37  
-GENCODE transcripts: 255637 (loaded from gob cache in 3.084s)  
+GENCODE transcripts: 196520 (loaded from gob cache in 1.88s)  
 Workers: 4 (GOMAXPROCS)
 
 ## Match Rates
 
 | Study | Variants | Conseq Match | Conseq Mismatch | Conseq Rate | HGVSp Match | HGVSp Mismatch | HGVSp Rate | HGVSc Match | HGVSc Mismatch | HGVSc Rate |
 |-------|----------|-------------|-----------------|-------------|-------------|----------------|------------|-------------|----------------|------------|
-| msk_impact_50k_2026 | 479096 | 474412 | 125 | 99.0% | 420182 | 114 | 87.7% | 436675 | 183 | 91.1% |
-| **Total** | **479096** | **474412** | **125** | **99.0%** | **420182** | **114** | **87.7%** | **436675** | **183** | **91.1%** |
+| msk_impact_50k_2026 | 479096 | 476530 | 100 | 99.5% | 442364 | 105 | 92.3% | 459316 | 161 | 95.9% |
+| **Total** | **479096** | **476530** | **100** | **99.5%** | **442364** | **105** | **92.3%** | **459316** | **161** | **95.9%** |
 
 ## Consequence Category Breakdown
 
-| Study | delins_normalized | gene_model_change | match | mismatch | position_shift | transcript_model_change | upstream_reclassified |
-|-------|------|------|------|------|------|------|------|
-| msk_impact_50k_2026 | 2355 | 2 | 467163 | 125 | 1121 | 1081 | 7249 |
-| **Total** | **2355** | **2** | **467163** | **125** | **1121** | **1081** | **7249** |
+| Study | delins_normalized | match | mismatch | position_shift | transcript_model_change | upstream_reclassified |
+|-------|------|------|------|------|------|------|
+| msk_impact_50k_2026 | 2343 | 469297 | 100 | 92 | 31 | 7233 |
+| **Total** | **2343** | **469297** | **100** | **92** | **31** | **7233** |
 
 ## HGVSp Category Breakdown
 
 | Study | both_empty | delins_normalized | dup_vs_ins | fuzzy_fs | maf_empty | maf_nonstandard | match | mismatch | position_shift | splice_no_protein | splice_vs_predicted | splice_vs_syn | transcript_model_change | vep_empty |
 |-------|------|------|------|------|------|------|------|------|------|------|------|------|------|------|
-| msk_impact_50k_2026 | 6969 | 5174 | 41 | 17669 | 324 | 329 | 420182 | 114 | 23685 | 1508 | 750 | 29 | 173 | 2149 |
-| **Total** | **6969** | **5174** | **41** | **17669** | **324** | **329** | **420182** | **114** | **23685** | **1508** | **750** | **29** | **173** | **2149** |
+| msk_impact_50k_2026 | 6929 | 5191 | 41 | 15608 | 364 | 496 | 442364 | 105 | 5319 | 1496 | 726 | 30 | 26 | 401 |
+| **Total** | **6929** | **5191** | **41** | **15608** | **364** | **496** | **442364** | **105** | **5319** | **1496** | **726** | **30** | **26** | **401** |
 
 ## HGVSc Category Breakdown
 
-| Study | both_empty | delins_normalized | dup_vs_ins | maf_empty | match | mismatch | position_shift | transcript_model_change | vep_empty |
-|-------|------|------|------|------|------|------|------|------|------|
-| msk_impact_50k_2026 | 6842 | 10115 | 438 | 433 | 436675 | 183 | 23877 | 531 | 2 |
-| **Total** | **6842** | **10115** | **438** | **433** | **436675** | **183** | **23877** | **531** | **2** |
+| Study | both_empty | delins_normalized | dup_vs_ins | maf_empty | match | mismatch | position_shift | transcript_model_change |
+|-------|------|------|------|------|------|------|------|------|
+| msk_impact_50k_2026 | 6861 | 10125 | 407 | 414 | 459316 | 161 | 1811 | 1 |
+| **Total** | **6861** | **10125** | **407** | **414** | **459316** | **161** | **1811** | **1** |
 
 ## Cancer Gene Mismatches
 
-356/475 cancer genes have 100% match across all columns. Mismatches in 119 gene(s):
+359/475 cancer genes have 100% match across all columns. Mismatches in 116 gene(s):
 
 | Gene | Variants | Conseq Mismatches | HGVSp Mismatches | HGVSc Mismatches |
 |------|----------|-------------------|------------------|------------------|
 | TP53 | 26720 | 9 | 7 | 9 |
-| FGFR3 | 1354 | 22 | 0 | 0 |
 | KRAS | 9096 | 0 | 4 | 11 |
 | EGFR | 4039 | 1 | 5 | 5 |
 | DNMT3A | 1069 | 2 | 2 | 6 |
-| CHEK2 | 569 | 3 | 3 | 3 |
 | KDM6A | 2144 | 3 | 3 | 3 |
 | ZFHX3 | 3661 | 2 | 2 | 4 |
 | ARID2 | 2282 | 2 | 2 | 3 |
 | CDKN2A | 2805 | 3 | 2 | 2 |
+| CHEK2 | 569 | 1 | 3 | 3 |
 | PIK3CA | 8894 | 1 | 3 | 3 |
 | INPPL1 | 1451 | 2 | 2 | 2 |
 | ARID1B | 2276 | 2 | 1 | 2 |
@@ -76,7 +75,6 @@ Workers: 4 (GOMAXPROCS)
 | IKZF1 | 1094 | 1 | 1 | 1 |
 | KMT2C | 4612 | 1 | 1 | 1 |
 | MST1R | 914 | 1 | 1 | 1 |
-| MYC | 385 | 3 | 0 | 0 |
 | NF1 | 4189 | 1 | 1 | 1 |
 | NKX3-1 | 216 | 1 | 1 | 1 |
 | NUP93 | 626 | 1 | 1 | 1 |
@@ -89,11 +87,11 @@ Workers: 4 (GOMAXPROCS)
 | SMAD3 | 652 | 3 | 0 | 0 |
 | AKT3 | 548 | 0 | 1 | 1 |
 | ATR | 1940 | 0 | 1 | 1 |
+| B2M | 778 | 2 | 0 | 0 |
 | BRCA1 | 1402 | 0 | 1 | 1 |
 | CCND1 | 385 | 0 | 1 | 1 |
 | CD79B | 230 | 0 | 1 | 1 |
 | CDK12 | 1417 | 0 | 1 | 1 |
-| CTLA4 | 261 | 0 | 1 | 1 |
 | EPHB1 | 1562 | 0 | 1 | 1 |
 | ERBB2 | 2092 | 0 | 1 | 1 |
 | EZH2 | 601 | 0 | 1 | 1 |
@@ -111,7 +109,6 @@ Workers: 4 (GOMAXPROCS)
 | NRAS | 1238 | 0 | 1 | 1 |
 | PDCD1 | 505 | 0 | 1 | 1 |
 | PIK3C2G | 1816 | 0 | 1 | 1 |
-| PTP4A1 | 100 | 2 | 0 | 0 |
 | REST | 121 | 0 | 1 | 1 |
 | SDHA | 503 | 0 | 1 | 1 |
 | SMARCA4 | 2858 | 0 | 1 | 1 |
@@ -122,15 +119,14 @@ Workers: 4 (GOMAXPROCS)
 | TSHR | 708 | 0 | 1 | 1 |
 | VEGFA | 180 | 0 | 1 | 1 |
 | AURKB | 222 | 1 | 0 | 0 |
-| B2M | 778 | 1 | 0 | 0 |
 | BBC3 | 189 | 1 | 0 | 0 |
 | BRCA2 | 2722 | 0 | 0 | 1 |
 | CARD11 | 1718 | 0 | 0 | 1 |
 | CARM1 | 362 | 1 | 0 | 0 |
 | CREBBP | 2811 | 0 | 0 | 1 |
+| CTLA4 | 261 | 0 | 0 | 1 |
 | ELF3 | 939 | 1 | 0 | 0 |
 | ERG | 628 | 0 | 0 | 1 |
-| FGFR1 | 727 | 1 | 0 | 0 |
 | FLT3 | 1091 | 0 | 0 | 1 |
 | FOXO1 | 497 | 0 | 0 | 1 |
 | FUBP1 | 617 | 1 | 0 | 0 |
@@ -141,9 +137,9 @@ Workers: 4 (GOMAXPROCS)
 | MSH2 | 968 | 1 | 0 | 0 |
 | MSH6 | 1319 | 0 | 0 | 1 |
 | MST1 | 274 | 0 | 0 | 1 |
+| MYC | 385 | 1 | 0 | 0 |
 | NTHL1 | 164 | 1 | 0 | 0 |
 | NTRK1 | 1006 | 0 | 0 | 1 |
-| PGBD5 | 95 | 1 | 0 | 0 |
 | PIK3CG | 1778 | 0 | 0 | 1 |
 | POLE | 2041 | 0 | 0 | 1 |
 | PTPRT | 3415 | 0 | 0 | 1 |
@@ -155,15 +151,16 @@ Workers: 4 (GOMAXPROCS)
 | SETD2 | 2666 | 0 | 0 | 1 |
 | SOS1 | 764 | 0 | 0 | 1 |
 | STK19 | 258 | 0 | 0 | 1 |
+| TERT | 8046 | 1 | 0 | 0 |
 | TGFBR2 | 1102 | 0 | 0 | 1 |
 | TP63 | 1155 | 1 | 0 | 0 |
 | VHL | 781 | 0 | 0 | 1 |
 
 ## Performance
 
-Transcript load: 3.084s from gob cache
+Transcript load: 1.88s from gob cache
 
 | Study | Variants | Sequential | Seq v/s | Parallel | Par v/s | Speedup |
 |-------|----------|-----------|---------|----------|---------|--------|
-| msk_impact_50k_2026 | 479096 | 36.41s | 13158 | 19.984s | 23975 | 1.82x |
-| **Total** | **479096** | **36.41s** | **13158** | **19.984s** | **23975** | **1.82x** |
+| msk_impact_50k_2026 | 479096 | 17.303s | 27688 | 8.703s | 55050 | 1.99x |
+| **Total** | **479096** | **17.303s** | **27688** | **8.703s** | **55050** | **1.99x** |
