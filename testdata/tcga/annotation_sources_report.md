@@ -1,6 +1,6 @@
 # Annotation Sources Report
 
-Generated: 2026-03-11 14:49 UTC  
+Generated: 2026-03-11 15:31 UTC  
 GENCODE transcripts: 254070  
 Data: unified genomic index (SQLite)  
 Workers: 4 (GOMAXPROCS)
@@ -50,11 +50,11 @@ Workers: 4 (GOMAXPROCS)
 
 | Study | Variants | Base Time | Index Lookup Time | Overhead | Lookups/sec |
 |-------|----------|-----------|-------------------|----------|-------------|
-| blca_tcga_gdc | 115850 | 33.494s | 9m13.761s | 1653.3% | 209 |
-| brca_tcga_gdc | 89012 | 24.691s | 3m11.473s | 775.5% | 465 |
-| chol_tcga_gdc | 3764 | 1.171s | 7.803s | 666.6% | 482 |
-| coad_tcga_gdc | 244552 | 44.747s | 4m40.477s | 626.8% | 872 |
-| gbm_tcga_gdc | 54870 | 10.466s | 37.869s | 361.8% | 1449 |
-| luad_tcga_gdc | 190868 | 28.542s | 1m51.628s | 391.1% | 1710 |
-| skcm_tcga_gdc | 353450 | 43.271s | 1m34.7s | 218.9% | 3732 |
-| **Total** | **1052366** | **3m6.382s** | **21m17.711s** | **685.5%** | **824** |
+| blca_tcga_gdc | 115850 | 21.017s | 52.384s | 249.2% | 2212 |
+| brca_tcga_gdc | 89012 | 17.437s | 24.928s | 143.0% | 3571 |
+| chol_tcga_gdc | 3764 | 725ms | 921ms | 127.1% | 4086 |
+| coad_tcga_gdc | 244552 | 33.095s | 58.798s | 177.7% | 4159 |
+| gbm_tcga_gdc | 54870 | 9.415s | 14.882s | 158.1% | 3687 |
+| luad_tcga_gdc | 190868 | 29.932s | 51.475s | 172.0% | 3708 |
+| skcm_tcga_gdc | 353450 | 46.805s | 1m37.97s | 209.3% | 3608 |
+| **Total** | **1052366** | **2m38.426s** | **5m1.357s** | **190.2%** | **3492** |
