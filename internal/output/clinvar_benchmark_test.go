@@ -61,17 +61,21 @@ func TestClinVarBenchmark(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load MANE: %v", err)
 	}
-	t.Logf("  Loaded %d MANE Select transcripts", len(maneMap))
+	t.Logf("  Loaded %d MANE Select transcripts", maneMap.Len())
 
-	// Mark MANE Select entries.
-	maneCount := 0
+	// Mark MANE Select entries and version-exact entries.
+	maneCount, maneVersionExactCount := 0, 0
 	for i := range entries {
 		if maneMap.HasRefSeq(entries[i].Transcript) {
 			entries[i].IsMANE = true
 			maneCount++
 		}
+		if maneMap.HasExactVersion(entries[i].TranscriptVersioned) {
+			entries[i].IsMANEVersionExact = true
+			maneVersionExactCount++
+		}
 	}
-	t.Logf("  %d entries on MANE Select transcripts", maneCount)
+	t.Logf("  %d entries on MANE Select transcripts (%d version-exact, no transcript drift)", maneCount, maneVersionExactCount)
 
 	// De-duplicate by genomic position — ClinVar has one row per allele but
 	// some positions appear multiple times (different review statuses). Keep
@@ -176,6 +180,9 @@ func TestClinVarBenchmark(t *testing.T) {
 			if e.IsMANE {
 				vibe.maneTotal++
 			}
+			if e.IsMANEVersionExact {
+				vibe.versionExactTotal++
+			}
 			best := output.PickBestAnnotation(anns)
 			if best != nil {
 				expClass := inferConsequenceClass(expected)
@@ -192,11 +199,17 @@ func TestClinVarBenchmark(t *testing.T) {
 						if e.IsMANE {
 							vibe.maneExact++
 						}
+						if e.IsMANEVersionExact {
+							vibe.versionExactMatch++
+						}
 					}
 					for _, a := range anns {
 						if normalizeProteinStr(a.HGVSp) == normalizeProteinStr(expected) {
 							bestAny = true
 							vibe.anyMatch++
+							if e.IsMANEVersionExact {
+								vibe.versionExactAny++
+							}
 							break
 						}
 					}
@@ -225,6 +238,9 @@ func TestClinVarBenchmark(t *testing.T) {
 			if e.IsMANE {
 				snpEff.maneTotal++
 			}
+			if e.IsMANEVersionExact {
+				snpEff.versionExactTotal++
+			}
 			if len(seAnns) > 0 {
 				best := pickBestSnpEffByImpact(seAnns)
 				expClass := inferConsequenceClass(expected)
@@ -241,11 +257,17 @@ func TestClinVarBenchmark(t *testing.T) {
 						if e.IsMANE {
 							snpEff.maneExact++
 						}
+						if e.IsMANEVersionExact {
+							snpEff.versionExactMatch++
+						}
 					}
 					for _, a := range seAnns {
 						if normalizeProteinStr(a.hgvsp) == normalizeProteinStr(expected) {
 							bestAny = true
 							snpEff.anyMatch++
+							if e.IsMANEVersionExact {
+								snpEff.versionExactAny++
+							}
 							break
 						}
 					}
@@ -276,6 +298,9 @@ func TestClinVarBenchmark(t *testing.T) {
 			if e.IsMANE {
 				vep.maneTotal++
 			}
+			if e.IsMANEVersionExact {
+				vep.versionExactTotal++
+			}
 			if len(vepAnns) > 0 {
 				best := pickBestVEPByImpact(vepAnns)
 				expClass := inferConsequenceClass(expected)
@@ -292,11 +317,17 @@ func TestClinVarBenchmark(t *testing.T) {
 						if e.IsMANE {
 							vep.maneExact++
 						}
+						if e.IsMANEVersionExact {
+							vep.versionExactMatch++
+						}
 					}
 					for _, a := range vepAnns {
 						if normalizeProteinStr(a.hgvsp) == normalizeProteinStr(expected) {
 							bestAny = true
 							vep.anyMatch++
+							if e.IsMANEVersionExact {
+								vep.versionExactAny++
+							}
 							break
 						}
 					}
@@ -332,23 +363,26 @@ func TestClinVarBenchmark(t *testing.T) {
 		}
 		return fmt.Sprintf("%.1f%%", 100*float64(n)/float64(d))
 	}
-	t.Logf("\nClinVar Benchmark Results (n=%d variants: %d SNVs + %d indels, %d MANE Select)",
-		len(entries), vibe.snvTotal, vibe.indelTotal, maneCount)
-	t.Logf("%-10s  %s  %s  %s  %s  %s  %s", "Tool", "HGVSp(best)", "HGVSp(any)", "Consequence", "MANE HGVSp", "SNV best", "Indel best")
-	t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "vibe-vep",
+	t.Logf("\nClinVar Benchmark Results (n=%d variants: %d SNVs + %d indels, %d MANE Select, %d version-exact)",
+		len(entries), vibe.snvTotal, vibe.indelTotal, maneCount, maneVersionExactCount)
+	t.Logf("%-10s  %s  %s  %s  %s  %s  %s  %s", "Tool", "HGVSp(best)", "HGVSp(any)", "Consequence", "MANE HGVSp", "VersionExact best", "SNV best", "Indel best")
+	t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-17s  %-8s  %-10s", "vibe-vep",
 		pct(vibe.exactMatch, vibe.total), pct(vibe.anyMatch, vibe.total),
 		pct(vibe.consequMatch, vibe.consequTotal), pct(vibe.maneExact, vibe.maneTotal),
+		pct(vibe.versionExactMatch, vibe.versionExactTotal),
 		pct(vibe.snvExact, vibe.snvTotal), pct(vibe.indelExact, vibe.indelTotal))
 	if hasSnpEff {
-		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "snpEff",
+		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-17s  %-8s  %-10s", "snpEff",
 			pct(snpEff.exactMatch, snpEff.total), pct(snpEff.anyMatch, snpEff.total),
 			pct(snpEff.consequMatch, snpEff.consequTotal), pct(snpEff.maneExact, snpEff.maneTotal),
+			pct(snpEff.versionExactMatch, snpEff.versionExactTotal),
 			pct(snpEff.snvExact, snpEff.snvTotal), pct(snpEff.indelExact, snpEff.indelTotal))
 	}
 	if hasVEP {
-		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-8s  %-10s", "VEP",
+		t.Logf("%-10s  %-11s  %-10s  %-11s  %-10s  %-17s  %-8s  %-10s", "VEP",
 			pct(vep.exactMatch, vep.total), pct(vep.anyMatch, vep.total),
 			pct(vep.consequMatch, vep.consequTotal), pct(vep.maneExact, vep.maneTotal),
+			pct(vep.versionExactMatch, vep.versionExactTotal),
 			pct(vep.snvExact, vep.snvTotal), pct(vep.indelExact, vep.indelTotal))
 	}
 }
@@ -360,11 +394,12 @@ type classCounts struct {
 
 // clinvarCounts holds benchmark counts for one annotation tool.
 type clinvarCounts struct {
-	total, exactMatch, anyMatch, maneTotal, maneExact int
-	consequMatch, consequTotal, notAnnotated           int
-	snvTotal, snvExact                                 int
-	indelTotal, indelExact                             int
-	byClass                                            map[string]*classCounts
+	total, exactMatch, anyMatch, maneTotal, maneExact         int
+	versionExactTotal, versionExactMatch, versionExactAny     int
+	consequMatch, consequTotal, notAnnotated                   int
+	snvTotal, snvExact                                         int
+	indelTotal, indelExact                                     int
+	byClass                                                    map[string]*classCounts
 }
 
 // trackClass records an observation for a consequence class.
@@ -639,10 +674,13 @@ func writeClinVarReport(
 
 	w := bufio.NewWriter(f)
 
-	maneCount := 0
+	maneCount, maneVersionExactCount := 0, 0
 	for _, e := range entries {
 		if e.IsMANE {
 			maneCount++
+		}
+		if e.IsMANEVersionExact {
+			maneVersionExactCount++
 		}
 	}
 	sigDist := countSignificance(entries)
@@ -665,6 +703,10 @@ func writeClinVarReport(
 		maneCount, len(entries), 100*float64(maneCount)/float64(len(entries)))
 	fmt.Fprintf(w, "For these, NM_ and ENST transcripts encode identical protein sequences,\n")
 	fmt.Fprintf(w, "making cross-tool HGVSp comparison directly meaningful.\n\n")
+	fmt.Fprintf(w, "**Version-exact subset**: %d / %d variants (%.0f%%) use the exact current MANE Select NM_ version.\n",
+		maneVersionExactCount, len(entries), 100*float64(maneVersionExactCount)/float64(len(entries)))
+	fmt.Fprintf(w, "Transcript version drift cannot affect these variants — the NM_ version in ClinVar\n")
+	fmt.Fprintf(w, "is identical to the version used by GENCODE v49 / Ensembl 115 annotation tools.\n\n")
 	fmt.Fprintf(w, "**Database versions**: GENCODE v49 / Ensembl 115 (vibe-vep, VEP), snpEff GRCh38.115.\n\n")
 	fmt.Fprintf(w, "## Dataset\n\n")
 	snvCount, indelCount := countVariantTypes(entries)
@@ -673,6 +715,7 @@ func writeClinVarReport(
 	fmt.Fprintf(w, "| SNVs | %d |\n", snvCount)
 	fmt.Fprintf(w, "| Indels (deletions, insertions, indels) | %d |\n", indelCount)
 	fmt.Fprintf(w, "| MANE Select transcripts | %d (%.0f%%) |\n", maneCount, 100*float64(maneCount)/float64(len(entries)))
+	fmt.Fprintf(w, "| Version-exact (no transcript drift) | %d (%.0f%%) |\n", maneVersionExactCount, 100*float64(maneVersionExactCount)/float64(len(entries)))
 	for sig, n := range sigDist {
 		fmt.Fprintf(w, "| %s | %d |\n", sig, n)
 	}
@@ -713,6 +756,25 @@ func writeClinVarReport(
 	}
 	if hasVEP {
 		fmt.Fprintf(w, "| Ensembl VEP v115 | %s |\n", pct(vep.maneExact, vep.maneTotal))
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "### Protein HGVS Match (Version-exact subset, n=%d)\n\n", maneVersionExactCount)
+	fmt.Fprintf(w, "_Version-exact variants use the identical NM_ version in ClinVar and in the annotation tools_\n")
+	fmt.Fprintf(w, "_database (GENCODE v49 / Ensembl 115). Transcript version drift cannot affect these results,_\n")
+	fmt.Fprintf(w, "_making this the most meaningful accuracy signal: failures are true algorithmic errors._\n\n")
+	fmt.Fprintf(w, "| Tool | HGVSp best | HGVSp any |\n|------|------------|----------|\n")
+	fmt.Fprintf(w, "| vibe-vep | %s | %s |\n",
+		pct(vibe.versionExactMatch, vibe.versionExactTotal),
+		pct(vibe.versionExactAny, vibe.versionExactTotal))
+	if hasSnpEff {
+		fmt.Fprintf(w, "| snpEff GRCh38.115 | %s | %s |\n",
+			pct(snpEff.versionExactMatch, snpEff.versionExactTotal),
+			pct(snpEff.versionExactAny, snpEff.versionExactTotal))
+	}
+	if hasVEP {
+		fmt.Fprintf(w, "| Ensembl VEP v115 | %s | %s |\n",
+			pct(vep.versionExactMatch, vep.versionExactTotal),
+			pct(vep.versionExactAny, vep.versionExactTotal))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "### HGVSp Match by Consequence Class\n\n")

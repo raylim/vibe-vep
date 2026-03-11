@@ -14,21 +14,24 @@ import (
 // SummaryEntry holds a single ClinVar variant_summary.txt.gz record
 // filtered and normalized for benchmarking.
 type SummaryEntry struct {
-	Chrom       string // e.g. "17"
-	Pos         int64  // VCF 1-based position
-	Ref         string // reference allele
-	Alt         string // alternate allele
-	Gene        string // gene symbol
-	Transcript  string // RefSeq NM_ transcript (unversioned, e.g. "NM_000546")
-	Protein     string // protein notation e.g. "p.Arg273Cys"
-	ClnSig      string // e.g. "Pathogenic"
-	RevStatus   string // e.g. "reviewed by expert panel"
-	VariantType string // "snv", "deletion", "insertion", "indel"
-	IsMANE      bool   // set later by caller after MANE lookup
+	Chrom              string // e.g. "17"
+	Pos                int64  // VCF 1-based position
+	Ref                string // reference allele
+	Alt                string // alternate allele
+	Gene               string // gene symbol
+	Transcript         string // RefSeq NM_ transcript (unversioned, e.g. "NM_000546")
+	TranscriptVersioned string // RefSeq NM_ transcript with version (e.g. "NM_000546.6")
+	Protein            string // protein notation e.g. "p.Arg273Cys"
+	ClnSig             string // e.g. "Pathogenic"
+	RevStatus          string // e.g. "reviewed by expert panel"
+	VariantType        string // "snv", "deletion", "insertion", "indel"
+	IsMANE             bool   // set later by caller after MANE lookup
+	IsMANEVersionExact bool   // set later: ClinVar NM_ version exactly matches current MANE
 }
 
 var reProtein = regexp.MustCompile(`\(p\.([^)]+)\)`)
 var reTranscript = regexp.MustCompile(`^([A-Z]{2}_\d+)`)
+var reTranscriptVersioned = regexp.MustCompile(`^([A-Z]{2}_\d+\.\d+)`)
 
 // ParseSummaryFile reads a (optionally gzipped) ClinVar variant_summary.txt[.gz]
 // and returns all GRCh38 pathogenic/likely-pathogenic SNVs and small indels
@@ -127,22 +130,24 @@ func ParseSummaryFile(path string) ([]SummaryEntry, error) {
 		}
 
 		tx := extractTranscript(name)
+		txV := extractTranscriptVersioned(name)
 		rev := ""
 		if idx := cols["ReviewStatus"]; idx >= 0 && idx < len(f) {
 			rev = f[idx]
 		}
 
 		entries = append(entries, SummaryEntry{
-			Chrom:       chrom,
-			Pos:         pos,
-			Ref:         ref,
-			Alt:         alt,
-			Gene:        get("GeneSymbol"),
-			Transcript:  tx,
-			Protein:     protein,
-			ClnSig:      sig,
-			RevStatus:   rev,
-			VariantType: variantType,
+			Chrom:               chrom,
+			Pos:                 pos,
+			Ref:                 ref,
+			Alt:                 alt,
+			Gene:                get("GeneSymbol"),
+			Transcript:          tx,
+			TranscriptVersioned: txV,
+			Protein:             protein,
+			ClnSig:              sig,
+			RevStatus:           rev,
+			VariantType:         variantType,
 		})
 	}
 	if err := scanner.Err(); err != nil {
@@ -181,6 +186,17 @@ func extractTranscript(name string) string {
 		tx = tx[:dot]
 	}
 	return tx
+}
+
+// extractTranscriptVersioned returns the versioned RefSeq accession from a Name field,
+// e.g. "NM_000546.6(TP53):c.817C>T (p.Arg273Cys)" → "NM_000546.6".
+// Returns "" if no versioned accession is present.
+func extractTranscriptVersioned(name string) string {
+	m := reTranscriptVersioned.FindStringSubmatch(name)
+	if m == nil {
+		return ""
+	}
+	return m[1]
 }
 
 // isPathogenic returns true for Pathogenic and Likely_pathogenic entries,

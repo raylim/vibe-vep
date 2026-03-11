@@ -13,6 +13,10 @@ independent of VEP, snpEff, or vibe-vep.
 For these, NM_ and ENST transcripts encode identical protein sequences,
 making cross-tool HGVSp comparison directly meaningful.
 
+**Version-exact subset**: 231699 / 232008 variants (100%) use the exact current MANE Select NM_ version.
+Transcript version drift cannot affect these variants — the NM_ version in ClinVar
+is identical to the version used by GENCODE v49 / Ensembl 115 annotation tools.
+
 **Database versions**: GENCODE v49 / Ensembl 115 (vibe-vep, VEP), snpEff GRCh38.115.
 
 ## Dataset
@@ -23,6 +27,7 @@ making cross-tool HGVSp comparison directly meaningful.
 | SNVs | 139222 |
 | Indels (deletions, insertions, indels) | 92786 |
 | MANE Select transcripts | 231858 (100%) |
+| Version-exact (no transcript drift) | 231699 (100%) |
 | Pathogenic | 232008 |
 
 ## Results
@@ -53,6 +58,18 @@ _the same transcript, so protein notation differences reflect real errors._
 | vibe-vep | 87.5% |
 | snpEff GRCh38.115 | 82.5% |
 | Ensembl VEP v115 | 79.8% |
+
+### Protein HGVS Match (Version-exact subset, n=231699)
+
+_Version-exact variants use the identical NM_ version in ClinVar and in the annotation tools_
+_database (GENCODE v49 / Ensembl 115). Transcript version drift cannot affect these results,_
+_making this the most meaningful accuracy signal: failures are true algorithmic errors._
+
+| Tool | HGVSp best | HGVSp any |
+|------|------------|----------|
+| vibe-vep | 87.5% | 95.9% |
+| snpEff GRCh38.115 | 82.5% | 96.0% |
+| Ensembl VEP v115 | 79.8% | 96.3% |
 
 ### HGVSp Match by Consequence Class
 
@@ -85,11 +102,11 @@ _`del`/`ins`/`dup` → `inframe_deletion`/`inframe_insertion`._
 
 | Tool | Variants | Time | Rate |
 |------|----------|------|------|
-| vibe-vep | 232008 | 10.3s | 22595 v/s |
+| vibe-vep | 232008 | 11.0s | 21162 v/s |
 | snpEff GRCh38.115 | 232008 | 452s | 513 v/s |
 | Ensembl VEP v115 | 232008 | 1333s | 174 v/s |
 
-_vibe-vep cache load: 2.0s from duckdb cache. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._
+_vibe-vep cache load: 2.1s from duckdb cache. snpEff/VEP times from `*.elapsed` sidecar written by annotation scripts._
 
 ## Interpretation
 
