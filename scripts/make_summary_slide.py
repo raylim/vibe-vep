@@ -1,113 +1,104 @@
-"""Generate a 3-slide summary deck for the ClinVar benchmark (4-tool comparison)."""
+"""
+3-slide summary deck with embedded matplotlib plots.
+Slide 1 — Overall HGVSp accuracy (best vs any, SNV vs indel)
+Slide 2 — Per-class breakdown + failure taxonomy
+Slide 3 — Performance + consequence class match
+"""
+
+import io
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.ticker as ticker
+import numpy as np
 
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
-# ── Palette ───────────────────────────────────────────────────────────────────
-DARK_BG  = RGBColor(0x1A, 0x1A, 0x2E)
-ACCENT   = RGBColor(0x00, 0xC8, 0xAA)   # teal  — vibe-vep
-AMBER    = RGBColor(0xFF, 0xC1, 0x07)   # amber — highlight
-WHITE    = RGBColor(0xFF, 0xFF, 0xFF)
-LGREY    = RGBColor(0xCC, 0xCC, 0xDD)
-ROW_E    = RGBColor(0x22, 0x22, 0x40)
-ROW_O    = RGBColor(0x2C, 0x2C, 0x50)
-HDR      = RGBColor(0x00, 0xA8, 0x8A)
-DIM      = RGBColor(0x66, 0x66, 0x88)
+# ── Shared palette ────────────────────────────────────────────────────────────
+BG      = "#1A1A2E"
+PANEL   = "#22223A"
+TEAL    = "#00C8AA"
+AMBER   = "#FFC107"
+CORAL   = "#FF6B6B"
+LAVEND  = "#A78BFA"
+GREY    = "#8888AA"
+WHITE   = "#FFFFFF"
+LGREY   = "#CCCCDD"
+DIMGREY = "#555577"
 
-W = Inches(13.33)
-H = Inches(7.5)
+TOOLS  = ["vibe-vep", "snpEff", "VEP v115", "ANNOVAR"]
+COLORS = [TEAL, AMBER, CORAL, LAVEND]
+
+# ── Helper: save figure to bytes ──────────────────────────────────────────────
+def fig_to_bytes(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor=BG)
+    buf.seek(0)
+    plt.close(fig)
+    return buf
+
+# ── PPTX helpers ──────────────────────────────────────────────────────────────
+SLIDE_W = Inches(13.33)
+SLIDE_H = Inches(7.5)
+DARK_BG = RGBColor(0x1A, 0x1A, 0x2E)
+C_TEAL  = RGBColor(0x00, 0xC8, 0xAA)
+C_AMBER = RGBColor(0xFF, 0xC1, 0x07)
+C_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+C_LGREY = RGBColor(0xCC, 0xCC, 0xDD)
+C_DIM   = RGBColor(0x55, 0x55, 0x77)
 
 prs = Presentation()
-prs.slide_width  = W
-prs.slide_height = H
-
-# ── Primitives ────────────────────────────────────────────────────────────────
+prs.slide_width  = SLIDE_W
+prs.slide_height = SLIDE_H
 
 def new_slide():
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    bg = slide.shapes.add_shape(1, 0, 0, W, H)
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = s.shapes.add_shape(1, 0, 0, SLIDE_W, SLIDE_H)
     bg.fill.solid(); bg.fill.fore_color.rgb = DARK_BG; bg.line.fill.background()
-    return slide
+    return s
 
-def hbar(slide, top, color=None):
-    b = slide.shapes.add_shape(1, 0, top, W, Inches(0.055))
-    b.fill.solid(); b.fill.fore_color.rgb = color or ACCENT; b.line.fill.background()
+def hbar(slide, top, color=C_TEAL):
+    b = slide.shapes.add_shape(1, 0, top, SLIDE_W, Inches(0.055))
+    b.fill.solid(); b.fill.fore_color.rgb = color; b.line.fill.background()
 
 def txt(slide, text, l, t, w, h, size=13, bold=False,
-        color=WHITE, align=PP_ALIGN.LEFT, wrap=True):
+        color=C_WHITE, align=PP_ALIGN.LEFT):
     tb = slide.shapes.add_textbox(l, t, w, h)
-    tb.word_wrap = wrap
-    tf = tb.text_frame; tf.word_wrap = wrap
+    tb.word_wrap = True
+    tf = tb.text_frame; tf.word_wrap = True
     p = tf.paragraphs[0]; p.alignment = align
     r = p.add_run(); r.text = text
     r.font.size = Pt(size); r.font.bold = bold
     r.font.color.rgb = color; r.font.name = "Calibri"
 
-def slide_header(slide, title, subtitle=None, slide_num=None, total=3):
+def slide_header(slide, title, subtitle, num, total=3):
     hbar(slide, Inches(1.02))
-    txt(slide, title, Inches(0.4), Inches(0.08), Inches(11.5), Inches(0.9),
-        size=30, bold=True, color=ACCENT)
-    if subtitle:
-        txt(slide, subtitle, Inches(0.4), Inches(1.1), Inches(12.5), Inches(0.38),
-            size=12, color=LGREY)
-    if slide_num:
-        txt(slide, f"{slide_num} / {total}", Inches(12.5), Inches(0.08),
-            Inches(0.8), Inches(0.5), size=12, color=DIM, align=PP_ALIGN.RIGHT)
+    txt(slide, title, Inches(0.4), Inches(0.08), Inches(11.8), Inches(0.9),
+        size=28, bold=True, color=C_TEAL)
+    txt(slide, subtitle, Inches(0.4), Inches(1.1), Inches(12.0), Inches(0.38),
+        size=12, color=C_LGREY)
+    txt(slide, f"{num} / {total}", Inches(12.5), Inches(0.08), Inches(0.8), Inches(0.5),
+        size=12, color=C_DIM, align=PP_ALIGN.RIGHT)
 
-def cell(slide, text, x, y, w, h, bg_color, fg=WHITE,
-         bold=False, size=12, align=PP_ALIGN.CENTER):
-    r = slide.shapes.add_shape(1, x, y, w, h)
-    r.fill.solid(); r.fill.fore_color.rgb = bg_color
-    r.line.color.rgb = DARK_BG; r.line.width = Pt(0.5)
-    tf = r.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.alignment = align
-    run = p.add_run(); run.text = text
-    run.font.size = Pt(size); run.font.bold = bold
-    run.font.color.rgb = fg; run.font.name = "Calibri"
+def add_fig(slide, fig, left, top, width, height):
+    buf = fig_to_bytes(fig)
+    slide.shapes.add_picture(buf, left, top, width, height)
 
-def table(slide, headers, rows, left, top, col_widths, row_height,
-          highlight_row=None, highlight_col=None, header_size=12, body_size=12):
-    """Draw a styled table."""
-    cw = [Inches(c) for c in col_widths]
-    rh = Inches(row_height)
-    x0 = left
-    # header
-    x = x0
-    for i, h in enumerate(headers):
-        cell(slide, h, x, top, cw[i], rh, HDR, bold=True, size=header_size)
-        x += cw[i]
-    # rows
-    for ri, row in enumerate(rows):
-        x = x0
-        bg = ROW_E if ri % 2 == 0 else ROW_O
-        is_hi = (highlight_row is not None and ri == highlight_row)
-        for ci, val in enumerate(row):
-            fg = AMBER if (is_hi and ci > 0) else (ACCENT if is_hi else LGREY)
-            cell(slide, val, x, top + rh * (ri + 1), cw[ci], rh, bg,
-                 fg=fg, bold=is_hi, size=body_size,
-                 align=PP_ALIGN.LEFT if ci == 0 else PP_ALIGN.CENTER)
-            x += cw[ci]
-
-def bullets(slide, items, left, top, width, height, size=13, indent="  "):
-    tb = slide.shapes.add_textbox(left, top, width, height)
-    tb.word_wrap = True
-    tf = tb.text_frame; tf.word_wrap = True
-    for i, item in enumerate(items):
-        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.alignment = PP_ALIGN.LEFT
-        r = p.add_run(); r.text = item
-        r.font.size = Pt(size); r.font.color.rgb = LGREY; r.font.name = "Calibri"
-
-def stat_box(slide, val, label, x, y, w=Inches(2.8), h=Inches(1.7)):
-    rect = slide.shapes.add_shape(1, x, y, w, h)
-    rect.fill.solid(); rect.fill.fore_color.rgb = ROW_O
-    rect.line.color.rgb = ACCENT; rect.line.width = Pt(1.5)
-    txt(slide, val,   x, y + Inches(0.1), w, Inches(0.85),
-        size=36, bold=True, color=ACCENT, align=PP_ALIGN.CENTER)
-    txt(slide, label, x, y + Inches(0.95), w, Inches(0.65),
-        size=11, color=LGREY, align=PP_ALIGN.CENTER)
+def ax_style(ax, title="", xlabel="", ylabel=""):
+    ax.set_facecolor(PANEL)
+    for spine in ax.spines.values():
+        spine.set_color("#333355")
+    ax.tick_params(colors=LGREY, labelsize=9)
+    if title:
+        ax.set_title(title, color=WHITE, fontsize=11, fontweight="bold", pad=7)
+    if xlabel:
+        ax.set_xlabel(xlabel, color=LGREY, fontsize=9)
+    if ylabel:
+        ax.set_ylabel(ylabel, color=LGREY, fontsize=9)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -116,38 +107,89 @@ def stat_box(slide, val, label, x, y, w=Inches(2.8), h=Inches(1.7)):
 s1 = new_slide()
 slide_header(s1,
     "HGVSp Accuracy — 4-Tool Comparison",
-    "232,008 pathogenic variants · independent ClinVar ground truth · GENCODE v49 / Ensembl 115",
-    slide_num=1)
+    "232,008 pathogenic ClinVar variants · independent ground truth · GENCODE v49 / Ensembl 115",
+    num=1)
 
-# Main accuracy table
-table(s1,
-    headers=["Tool", "HGVSp best", "HGVSp any", "SNV best", "Indel best", "MANE Select best"],
-    rows=[
-        ("vibe-vep",  "87.4%", "95.9%", "90.2%", "83.3%", "87.5%"),
-        ("snpEff",    "82.5%", "95.9%", "85.1%", "78.6%", "82.5%"),
-        ("VEP v115",  "79.8%", "96.2%", "81.2%", "77.6%", "79.8%"),
-        ("ANNOVAR",   "66.5%", "93.4%",   "—",     "—",     "—"),
-    ],
-    left=Inches(0.5), top=Inches(1.62),
-    col_widths=[2.8, 1.9, 1.9, 1.9, 1.9, 2.4],
-    row_height=0.48, highlight_row=0, body_size=13, header_size=13)
+# ── Plot A: best vs any (horizontal bar) ─────────────────────────────────────
+fig_a, ax = plt.subplots(figsize=(6.5, 3.2), facecolor=BG)
+ax_style(ax, title="Overall HGVSp Match")
 
-# Callout boxes
-stat_box(s1, "+5%",  "vs VEP on primary\ntranscript accuracy",  Inches(0.5),  Inches(4.1))
-stat_box(s1, "+5%",  "vs snpEff on primary\ntranscript accuracy", Inches(3.5), Inches(4.1))
-stat_box(s1, "+21%", "vs ANNOVAR on\nprimary accuracy",          Inches(6.5),  Inches(4.1))
-stat_box(s1, "~96%", "All tools converge\n(any transcript)",     Inches(9.5),  Inches(4.1))
+best = [87.4, 82.5, 79.8, 64.8]
+any_ = [95.9, 95.9, 96.2, 95.4]
+y    = np.arange(len(TOOLS))
+h    = 0.35
 
+bars_any  = ax.barh(y - h/2, any_,  h, color=COLORS, alpha=0.38, label="Any transcript")
+bars_best = ax.barh(y + h/2, best,  h, color=COLORS, alpha=0.95, label="Primary transcript")
+
+for bar, val, col in zip(bars_best, best, COLORS):
+    ax.text(val + 0.3, bar.get_y() + bar.get_height()/2,
+            f"{val}%", va="center", color=col, fontsize=9, fontweight="bold")
+for bar, val in zip(bars_any, any_):
+    ax.text(val + 0.3, bar.get_y() + bar.get_height()/2,
+            f"{val}%", va="center", color=LGREY, fontsize=8.5)
+
+ax.set_yticks(y)
+ax.set_yticklabels(TOOLS, color=LGREY, fontsize=9)
+ax.set_xlim(55, 103)
+ax.set_xlabel("% HGVSp match", color=LGREY, fontsize=9)
+ax.axvline(90, color=GREY, lw=0.7, ls="--", alpha=0.5)
+solid = mpatches.Patch(color=GREY, alpha=0.95, label="Primary transcript")
+light = mpatches.Patch(color=GREY, alpha=0.38, label="Any transcript")
+ax.legend(handles=[solid, light], fontsize=8, facecolor=PANEL,
+          labelcolor=LGREY, edgecolor="#333355", loc="lower right")
+fig_a.tight_layout()
+add_fig(s1, fig_a, Inches(0.3), Inches(1.55), Inches(6.6), Inches(3.5))
+
+# ── Plot B: SNV vs Indel (grouped horizontal bar) ────────────────────────────
+fig_b, ax = plt.subplots(figsize=(6.0, 3.2), facecolor=BG)
+ax_style(ax, title="HGVSp Best by Variant Type")
+
+snv   = [90.2, 85.1, 81.2, 69.0]
+indel = [83.3, 78.6, 77.6, 58.6]
+y     = np.arange(len(TOOLS))
+
+bars_s = ax.barh(y + h/2, snv,   h, color=COLORS, alpha=0.95, label="SNV")
+bars_i = ax.barh(y - h/2, indel, h, color=COLORS, alpha=0.45, label="Indel")
+
+for bar, val, col in zip(bars_s, snv, COLORS):
+    ax.text(val + 0.3, bar.get_y() + bar.get_height()/2,
+            f"{val}%", va="center", color=col, fontsize=9, fontweight="bold")
+for bar, val in zip(bars_i, indel):
+    ax.text(val + 0.3, bar.get_y() + bar.get_height()/2,
+            f"{val}%", va="center", color=LGREY, fontsize=8.5)
+
+ax.set_yticks(y); ax.set_yticklabels(TOOLS, color=LGREY, fontsize=9)
+ax.set_xlim(50, 103)
+ax.set_xlabel("% HGVSp match", color=LGREY, fontsize=9)
+solid = mpatches.Patch(color=GREY, alpha=0.95, label="SNV")
+light = mpatches.Patch(color=GREY, alpha=0.45, label="Indel")
+ax.legend(handles=[solid, light], fontsize=8, facecolor=PANEL,
+          labelcolor=LGREY, edgecolor="#333355", loc="lower right")
+fig_b.tight_layout()
+add_fig(s1, fig_b, Inches(6.9), Inches(1.55), Inches(6.1), Inches(3.5))
+
+# Callout row
+for val, label, x in [
+    ("+7%",  "vs snpEff\n(primary)",   Inches(0.4)),
+    ("+23%", "vs ANNOVAR\n(primary)",  Inches(3.0)),
+    ("+7%",  "vs snpEff\n(SNV)",       Inches(5.8)),
+    ("+25%", "vs ANNOVAR\n(indel)",    Inches(8.6)),
+    ("~96%", "all tools converge\n(any tx)", Inches(10.8)),
+]:
+    rect = s1.shapes.add_shape(1, x, Inches(5.35), Inches(2.4), Inches(1.05))
+    rect.fill.solid(); rect.fill.fore_color.rgb = RGBColor(0x2C, 0x2C, 0x50)
+    rect.line.color.rgb = C_TEAL; rect.line.width = Pt(1.2)
+    txt(s1, val,   x, Inches(5.36), Inches(2.4), Inches(0.55),
+        size=22, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER)
+    txt(s1, label, x, Inches(5.88), Inches(2.4), Inches(0.48),
+        size=10, color=C_LGREY, align=PP_ALIGN.CENTER)
+
+hbar(s1, Inches(6.52), color=C_AMBER)
 txt(s1,
-    "All tools reach ~96% when any transcript is considered — the primary accuracy gap is entirely transcript selection, not algorithm.",
-    Inches(0.5), Inches(6.05), Inches(12.3), Inches(0.45),
-    size=13, color=LGREY)
-txt(s1,
-    "ANNOVAR does not report SNV/Indel breakdown or MANE Select subset.",
-    Inches(0.5), Inches(6.5), Inches(12.3), Inches(0.35),
-    size=11, color=DIM)
-
-hbar(s1, Inches(7.38), color=AMBER)
+    "Gap between primary and any-transcript accuracy is entirely transcript selection — not algorithmic differences.",
+    Inches(0.4), Inches(6.58), Inches(12.5), Inches(0.38),
+    size=11, color=C_LGREY)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -156,127 +198,165 @@ hbar(s1, Inches(7.38), color=AMBER)
 s2 = new_slide()
 slide_header(s2,
     "Per-Class Accuracy & Failure Taxonomy",
-    "Best = primary transcript · Any = correct HGVSp exists in any annotated transcript",
-    slide_num=2)
+    "Primary transcript accuracy by consequence class · mutually exclusive failure breakdown",
+    num=2)
 
-# Per-class table
-table(s2,
-    headers=["Class (n)", "vibe best", "vibe any", "snpEff best", "snpEff any", "VEP best", "VEP any", "ANNOVAR best", "ANNOVAR any"],
-    rows=[
-        ("missense (70k)",    "91.3%", "97.2%", "86.0%", "97.2%", "80.8%", "97.2%", "70.6%", "97.2%"),
-        ("frameshift (83k)",  "88.5%", "98.5%", "84.1%", "99.7%", "82.3%", "99.6%", "63.6%", "99.5%"),
-        ("stop_gained (76k)", "83.1%", "92.1%", "78.9%", "92.3%", "77.3%", "93.2%", "63.0%", "91.9%"),
-        ("inframe_del (2k)",  "86.8%", "92.8%", "82.1%", "94.9%", "78.3%", "94.9%", "53.8%", "96.7%"),
-        ("inframe_ins (748)", "83.3%", "91.4%", "60.6%", "70.7%", "71.5%", "86.5%",  "0.0%",  "0.0%"),
-        ("synonymous (815)",  "89.8%", "99.3%",  "0.0%",  "0.0%",  "0.0%",  "0.0%",  "0.0%",  "0.0%"),
-    ],
-    left=Inches(0.3), top=Inches(1.62),
-    col_widths=[2.15, 1.25, 1.2, 1.35, 1.2, 1.25, 1.2, 1.5, 1.4],
-    row_height=0.42, highlight_row=None, body_size=11, header_size=11)
+# ── Plot C: per-class grouped bars ───────────────────────────────────────────
+fig_c, ax = plt.subplots(figsize=(8.0, 3.6), facecolor=BG)
+ax_style(ax, title="HGVSp Best by Consequence Class")
 
-# Failure taxonomy mini-table
-txt(s2, "Failure breakdown",
-    Inches(0.3), Inches(5.3), Inches(5), Inches(0.35),
-    size=12, bold=True, color=ACCENT)
+classes    = ["missense\n(70k)", "frameshift\n(83k)", "stop_gained\n(76k)",
+              "inframe_del\n(2k)", "inframe_ins\n(748)", "synonymous\n(815)"]
+vibe_v  = [91.3, 88.5, 83.1, 86.8, 83.3, 89.8]
+snpeff_v= [86.0, 84.1, 78.9, 82.1, 60.6,  0.0]
+vep_v   = [80.8, 82.3, 77.3, 78.3, 71.5,  0.0]
+annov_v = [70.6, 63.6, 63.0, 53.8,  0.0,  0.0]
 
-table(s2,
-    headers=["Tool", "Transcript choice", "Algorithmic fail", "Not annotated"],
-    rows=[
-        ("vibe-vep",  "8.4%",  "3.5%", "1,508"),
-        ("snpEff",   "13.4%",  "3.9%",   "318"),
-        ("VEP v115", "16.5%",  "3.4%",   "837"),
-        ("ANNOVAR",  "30.6%",  "4.3%",    "21"),
-    ],
-    left=Inches(0.3), top=Inches(5.62),
-    col_widths=[2.0, 2.5, 2.2, 2.0],
-    row_height=0.37, highlight_row=0, body_size=11, header_size=11)
+xx   = np.arange(len(classes))
+bw   = 0.19
+offs = [-1.5, -0.5, 0.5, 1.5]
+all_vals = [vibe_v, snpeff_v, vep_v, annov_v]
 
-# Key notes on right
-txt(s2, "Notable findings",
-    Inches(9.1), Inches(5.3), Inches(4.0), Inches(0.35),
-    size=12, bold=True, color=ACCENT)
+for i, (vals, col, tool) in enumerate(zip(all_vals, COLORS, TOOLS)):
+    bars = ax.bar(xx + offs[i]*bw, vals, bw, color=col, alpha=0.88, label=tool)
 
-bullets(s2, [
-    "• ANNOVAR: 0% on inframe_ins & synonymous",
-    "  (not annotated in protein-change field)",
-    "• snpEff/VEP: 0% on synonymous — only",
-    "  vibe-vep emits p.Arg273= notation",
-    "• ANNOVAR: 30.6% transcript-choice errors",
-    "  vs 8.4% for vibe-vep",
-    "• Complete-fail rates nearly equal across",
-    "  tools — dominated by ClinVar artifacts",
-],
-    Inches(9.1), Inches(5.65), Inches(4.1), Inches(1.65), size=11)
+ax.set_xticks(xx); ax.set_xticklabels(classes, color=LGREY, fontsize=8.5)
+ax.set_ylim(0, 106); ax.set_ylabel("% HGVSp match", color=LGREY, fontsize=9)
+ax.axhline(90, color=GREY, lw=0.6, ls="--", alpha=0.4)
+ax.legend(fontsize=9, facecolor=PANEL, labelcolor=LGREY,
+          edgecolor="#333355", loc="lower left", ncol=2)
 
-hbar(s2, Inches(7.38), color=AMBER)
+# annotate 0% bars
+for xi, cls in enumerate(classes):
+    if cls.startswith("inframe_ins") or cls.startswith("synonymous"):
+        for i, (vals, col) in enumerate(zip(all_vals, COLORS)):
+            if vals[xi] == 0.0:
+                ax.text(xi + offs[i]*bw, 1.5, "0%",
+                        ha="center", va="bottom", color=col, fontsize=7, alpha=0.7)
+
+fig_c.tight_layout()
+add_fig(s2, fig_c, Inches(0.3), Inches(1.55), Inches(8.1), Inches(3.85))
+
+# ── Plot D: failure taxonomy stacked bar ─────────────────────────────────────
+fig_d, ax = plt.subplots(figsize=(4.5, 3.6), facecolor=BG)
+ax_style(ax, title="Failure Taxonomy")
+
+tx_err   = [8.4,  13.4, 16.5, 30.6]   # transcript choice
+algo_err = [3.5,   3.9,  3.4,  4.3]   # complete fail
+not_ann  = [1508/232008*100, 318/232008*100, 837/232008*100, 21/232008*100]
+
+x  = np.arange(len(TOOLS))
+bw = 0.55
+
+p1 = ax.bar(x, tx_err,   bw, color=AMBER,  alpha=0.88, label="Transcript choice")
+p2 = ax.bar(x, algo_err, bw, color=CORAL,  alpha=0.88, label="Algorithmic fail",
+            bottom=tx_err)
+p3 = ax.bar(x, not_ann,  bw, color=LAVEND, alpha=0.88, label="Not annotated",
+            bottom=[t+a for t,a in zip(tx_err, algo_err)])
+
+for xi, (t, a, n) in enumerate(zip(tx_err, algo_err, not_ann)):
+    total = t + a + n
+    ax.text(xi, total + 0.4, f"{total:.1f}%",
+            ha="center", va="bottom", color=LGREY, fontsize=9, fontweight="bold")
+
+ax.set_xticks(x); ax.set_xticklabels(TOOLS, color=LGREY, fontsize=9)
+ax.set_ylabel("% of variants", color=LGREY, fontsize=9)
+ax.legend(fontsize=8, facecolor=PANEL, labelcolor=LGREY, edgecolor="#333355")
+fig_d.tight_layout()
+add_fig(s2, fig_d, Inches(8.5), Inches(1.55), Inches(4.6), Inches(3.85))
+
+hbar(s2, Inches(5.55), color=C_AMBER)
+txt(s2,
+    "ANNOVAR: 0% on inframe_ins & synonymous (not annotated in protein field) · "
+    "30.6% transcript-choice errors vs 8.4% for vibe-vep · "
+    "Complete-fail rates (~3–4%) are equal across all tools — dominated by ClinVar format artifacts",
+    Inches(0.4), Inches(5.62), Inches(12.5), Inches(0.6),
+    size=11, color=C_LGREY)
+
+txt(s2, "Only vibe-vep emits HGVSp for synonymous variants (e.g. p.Arg273=) — snpEff, VEP, and ANNOVAR report nothing.",
+    Inches(0.4), Inches(6.3), Inches(12.5), Inches(0.35),
+    size=11, color=C_LGREY)
+hbar(s2, Inches(6.75), color=C_TEAL)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Slide 3 — Performance & Summary
 # ══════════════════════════════════════════════════════════════════════════════
 s3 = new_slide()
-slide_header(s3, "Performance & Summary", slide_num=3)
+slide_header(s3,
+    "Performance & Summary",
+    "End-to-end wall time · 232,008 variants · vibe-vep cache load: 2.0 s from DuckDB",
+    num=3)
 
-# Performance table
-txt(s3, "Annotation speed",
-    Inches(0.4), Inches(1.6), Inches(5), Inches(0.38),
-    size=13, bold=True, color=ACCENT)
+# ── Plot E: speed log bar ─────────────────────────────────────────────────────
+fig_e, ax = plt.subplots(figsize=(5.5, 3.4), facecolor=BG)
+ax_style(ax, title="Annotation Speed (log scale)", ylabel="variants / second")
 
-table(s3,
-    headers=["Tool", "Time", "Rate", "vs vibe-vep"],
-    rows=[
-        ("vibe-vep",  "10.0 s",   "23,226 v/s", "—"),
-        ("snpEff",    "452 s",       "513 v/s",  "45× slower"),
-        ("VEP v115",  "1,333 s",     "174 v/s", "133× slower"),
-        ("ANNOVAR",   "1,538 s",     "151 v/s", "154× slower"),
-    ],
-    left=Inches(0.4), top=Inches(1.95),
-    col_widths=[2.6, 1.6, 2.0, 2.2],
-    row_height=0.44, highlight_row=0, body_size=13, header_size=13)
+speeds = [23345, 513, 174, 151]
+x      = np.arange(len(TOOLS))
+bars   = ax.bar(x, speeds, 0.55, color=COLORS, alpha=0.88)
+ax.set_yscale("log")
+ax.set_xticks(x); ax.set_xticklabels(TOOLS, color=LGREY, fontsize=9)
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{int(v):,}"))
+ax.tick_params(axis="y", colors=LGREY)
 
-txt(s3, "* vibe-vep includes 2.0 s DuckDB cache load. Annotation-only: ~29,700 v/s.",
-    Inches(0.4), Inches(4.02), Inches(8.6), Inches(0.35),
-    size=10, color=DIM)
+for bar, val, tool in zip(bars, speeds, TOOLS):
+    ax.text(bar.get_x() + bar.get_width()/2, val * 1.3,
+            f"{val:,}", ha="center", va="bottom",
+            color=WHITE if tool == "vibe-vep" else LGREY,
+            fontsize=9, fontweight="bold" if tool == "vibe-vep" else "normal")
 
-# Consequence class match
-txt(s3, "Consequence class accuracy",
-    Inches(9.0), Inches(1.6), Inches(4.0), Inches(0.38),
-    size=13, bold=True, color=ACCENT)
+for i, (s, tool) in enumerate(zip(speeds[1:], TOOLS[1:]), 1):
+    ratio = speeds[0] / s
+    ax.text(i, s * 0.4, f"{ratio:.0f}× slower",
+            ha="center", va="top", color=GREY, fontsize=8, style="italic")
 
-table(s3,
-    headers=["Tool", "Consequence match"],
-    rows=[
-        ("vibe-vep",  "97.7%"),
-        ("snpEff",    "97.0%"),
-        ("VEP v115",  "96.9%"),
-        ("ANNOVAR",   "97.8%"),
-    ],
-    left=Inches(9.0), top=Inches(1.95),
-    col_widths=[2.4, 2.2],
-    row_height=0.44, highlight_row=0, body_size=13, header_size=13)
+fig_e.tight_layout()
+add_fig(s3, fig_e, Inches(0.3), Inches(1.52), Inches(5.6), Inches(3.6))
 
-# Summary stat boxes
-txt(s3, "Summary",
-    Inches(0.4), Inches(4.5), Inches(3), Inches(0.38),
-    size=13, bold=True, color=ACCENT)
+# ── Plot F: consequence class match (horizontal bar) ─────────────────────────
+fig_f, ax = plt.subplots(figsize=(4.5, 3.4), facecolor=BG)
+ax_style(ax, title="Consequence Class Match")
 
-stat_box(s3, "87.4%", "Best HGVSp accuracy\n(highest of 4 tools)", Inches(0.4),  Inches(4.85), w=Inches(2.9))
-stat_box(s3, "97.7%", "Consequence match\n(highest of 4 tools)",   Inches(3.5),  Inches(4.85), w=Inches(2.9))
-stat_box(s3, "154×",  "Faster than ANNOVAR\n(23k vs 151 v/s)",     Inches(6.6),  Inches(4.85), w=Inches(2.9))
-stat_box(s3, "2",     "Fixable vibe-specific\ngaps remaining",      Inches(9.7),  Inches(4.85), w=Inches(2.9))
+conseq = [97.7, 97.0, 96.9, 97.8]
+y      = np.arange(len(TOOLS))
+bars   = ax.barh(y, conseq, 0.5, color=COLORS, alpha=0.88)
+for bar, val, col in zip(bars, conseq, COLORS):
+    ax.text(val + 0.02, bar.get_y() + bar.get_height()/2,
+            f"{val}%", va="center", color=col, fontsize=9, fontweight="bold")
+ax.set_yticks(y); ax.set_yticklabels(TOOLS, color=LGREY, fontsize=9)
+ax.set_xlim(95.5, 99.0)
+ax.set_xlabel("% match", color=LGREY, fontsize=9)
+ax.axvline(97, color=GREY, lw=0.7, ls="--", alpha=0.5)
+fig_f.tight_layout()
+add_fig(s3, fig_f, Inches(5.9), Inches(1.52), Inches(4.6), Inches(3.6))
 
-bullets(s3, [
-    "• Fixable gaps: (1) splice-adjacent frameshifts emit _splice suffix instead of p.XxxNNNfs",
-    "  → improve splice/frameshift priority at exon boundaries",
-    "• (2) stop-creating inframe deletions misclassified as stop_gained",
-    "  → preserve inframe_del classification when reading frame is intact",
-    "• Shared failures (stop_gained, missense) are ClinVar format artifacts, not algorithmic errors",
-],
-    Inches(0.4), Inches(6.65), Inches(12.5), Inches(0.75), size=11)
+# ── Summary stat boxes ────────────────────────────────────────────────────────
+boxes = [
+    ("87.4%", "Highest primary\nHGVSp accuracy"),
+    ("97.7%", "Highest consequence\nclass match"),
+    ("154×",  "Faster than\nANNOVAR"),
+    ("2",     "Fixable vibe-specific\ngaps remaining"),
+]
+for i, (val, label) in enumerate(boxes):
+    x = Inches(0.4 + i * 3.1)
+    y = Inches(5.35)
+    rect = s3.shapes.add_shape(1, x, y, Inches(2.85), Inches(1.55))
+    rect.fill.solid(); rect.fill.fore_color.rgb = RGBColor(0x2C, 0x2C, 0x50)
+    rect.line.color.rgb = C_TEAL; rect.line.width = Pt(1.5)
+    txt(s3, val,   x, y + Inches(0.06), Inches(2.85), Inches(0.75),
+        size=30, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER)
+    txt(s3, label, x, y + Inches(0.8),  Inches(2.85), Inches(0.65),
+        size=10, color=C_LGREY, align=PP_ALIGN.CENTER)
 
-hbar(s3, Inches(7.38), color=AMBER)
+hbar(s3, Inches(7.08), color=C_AMBER)
+txt(s3,
+    "Fixable gaps: (1) splice-adjacent frameshifts emit _splice HGVSp suffix — fix splice/frameshift priority at exon boundaries  "
+    "·  (2) stop-creating inframe deletions misclassified as stop_gained — preserve inframe_del when reading frame is intact",
+    Inches(0.4), Inches(7.14), Inches(12.5), Inches(0.32),
+    size=10, color=C_LGREY)
 
 # ── Save ──────────────────────────────────────────────────────────────────────
 out = "testdata/clinvar/benchmark_summary_slide.pptx"
 prs.save(out)
-print(f"Saved: {out}  ({prs.slides._sldIdLst.__len__()} slides)")
+print(f"Saved: {out}")

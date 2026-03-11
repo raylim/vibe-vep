@@ -619,13 +619,34 @@ func loadClinVarCache(t *testing.T) (*cache.Cache, string, time.Duration) {
 // tools emit the full HGVS form p.Asp113ValfsTer15. Both are valid; we normalize
 // to the abbreviated form (first-affected AA + position + "fs") so they compare equal.
 // We also normalize stop-codon notation: p.Arg273* → p.Arg273Ter (snpEff uses *, ClinVar uses Ter).
+// Synonymous variants have multiple representations:
+//   - HGVS standard: p.Val320= (ClinVar, vibe-vep, VEP with %3D URL-encoding)
+//   - snpEff: p.Val331Val (repeated 3-letter AA)
+//   - ANNOVAR: p.V320V (repeated 1-letter AA)
+//
+// All are normalized to the HGVS = form (e.g. Val320=).
 var (
 	reProteinNorm = regexp.MustCompile(`(?i)ter\b`)
 	// reFsNorm matches full HGVS frameshift: XxxNNNYyyfs... and strips the new AA + stop.
 	reFsNorm = regexp.MustCompile(`^([A-Z][a-z]{2}\d+)[A-Z][a-z]{2}fs.*$`)
+	// reSynonymous3 matches snpEff synonymous: p.ValNNNVal (same 3-letter AA repeated).
+	reSynonymous3 = regexp.MustCompile(`^([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})$`)
+	// reSynonymous1 matches ANNOVAR synonymous: p.VNNNv or p.VNNNV (same 1-letter AA).
+	reSynonymous1 = regexp.MustCompile(`^([A-Z])(\d+)([A-Za-z])$`)
 )
 
+// oneToThree maps 1-letter amino acid codes to 3-letter HGVS codes.
+var oneToThree = map[byte]string{
+	'A': "Ala", 'R': "Arg", 'N': "Asn", 'D': "Asp", 'C': "Cys",
+	'E': "Glu", 'Q': "Gln", 'G': "Gly", 'H': "His", 'I': "Ile",
+	'L': "Leu", 'K': "Lys", 'M': "Met", 'F': "Phe", 'P': "Pro",
+	'S': "Ser", 'T': "Thr", 'W': "Trp", 'Y': "Tyr", 'V': "Val",
+	'*': "Ter",
+}
+
 func normalizeProteinStr(p string) string {
+	// VEP URL-encodes '=' as '%3D' in the HGVSp field.
+	p = strings.ReplaceAll(p, "%3D", "=")
 	p = strings.TrimPrefix(p, "p.")
 	p = strings.TrimSpace(p)
 	// Normalize stop-codon notations: * and X both map to Ter.
@@ -634,6 +655,16 @@ func normalizeProteinStr(p string) string {
 	// Normalize full HGVS frameshift to abbreviated form: XxxNNNYyyFsTerM → XxxNNNfs
 	if m := reFsNorm.FindStringSubmatch(p); m != nil {
 		return m[1] + "fs"
+	}
+	// Normalize snpEff repeated-AA synonymous: ValNNNVal → ValNNN=
+	if m := reSynonymous3.FindStringSubmatch(p); m != nil && strings.EqualFold(m[1], m[3]) {
+		return m[1] + m[2] + "="
+	}
+	// Normalize ANNOVAR 1-letter repeated synonymous: VNNNV → ValNNN=
+	if m := reSynonymous1.FindStringSubmatch(p); m != nil && strings.ToUpper(m[1]) == strings.ToUpper(m[3]) {
+		if three, ok := oneToThree[m[1][0]]; ok {
+			return three + m[2] + "="
+		}
 	}
 	return p
 }
@@ -1130,8 +1161,9 @@ func writeClinVarReport(
 			"(position-range, dup vs ins disambiguation). 57% of complete failures are\n" +
 			"shared across all tools (ClinVar format artifacts); the remainder require\n" +
 			"further investigation.\n\n",
-		"synonymous": "snpEff and VEP do not emit HGVSp for synonymous variants (silent change is not\n" +
-			"annotated in the protein-change field); vibe-vep outputs `p.Arg273=` notation.\n\n",
+		"synonymous": "All tools report HGVSp for synonymous variants but with different notations:\n" +
+			"vibe-vep/VEP use HGVS `p.Val320=` while snpEff uses `p.Val331Val` and ANNOVAR uses `p.V320V`.\n" +
+			"After notation normalization, differences reflect transcript selection, not algorithmic gaps.\n\n",
 	}
 
 	for _, ci := range classInfo {
