@@ -104,6 +104,37 @@ func TestParseVariantSpec(t *testing.T) {
 				}
 			},
 		},
+		// HGVSg formats
+		{
+			input:    "5:g.1293968del",
+			wantType: SpecHGVSg,
+			check: func(t *testing.T, s *VariantSpec) {
+				t.Helper()
+				if s.Chrom != "5" || s.GenomicChange != "1293968del" {
+					t.Errorf("got %+v", s)
+				}
+			},
+		},
+		{
+			input:    "chr5:g.1293968_1293970del",
+			wantType: SpecHGVSg,
+			check: func(t *testing.T, s *VariantSpec) {
+				t.Helper()
+				if s.Chrom != "5" || s.GenomicChange != "1293968_1293970del" {
+					t.Errorf("got %+v", s)
+				}
+			},
+		},
+		{
+			input:    "12:g.25245350C>T",
+			wantType: SpecHGVSg,
+			check: func(t *testing.T, s *VariantSpec) {
+				t.Helper()
+				if s.Chrom != "12" || s.GenomicChange != "25245350C>T" {
+					t.Errorf("got %+v", s)
+				}
+			},
+		},
 		// Errors
 		{input: "", wantErr: true},
 		{input: "not a variant", wantErr: true},

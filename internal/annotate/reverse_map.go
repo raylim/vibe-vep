@@ -287,6 +287,107 @@ func reverseMapHGVScDeletion(c *cache.Cache, geneOrTranscript string, m []string
 	}}, nil
 }
 
+// reGenomicSubstitution parses a genomic substitution like "1293968C>T".
+var reGenomicSubstitution = regexp.MustCompile(`^(\d+)([ACGT])>([ACGT])$`)
+
+// reGenomicDeletion parses a genomic deletion like "1293968del" or "1293968_1293970del".
+var reGenomicDeletion = regexp.MustCompile(`^(\d+)(?:_(\d+))?del$`)
+
+// ResolveHGVSg resolves an HGVSg notation (e.g. "1293968del") on a given chromosome
+// to a VCF-convention variant. For deletions, it looks up reference bases from a
+// transcript's CDS sequence.
+func ResolveHGVSg(c *cache.Cache, chrom string, genomicChange string) ([]*vcf.Variant, error) {
+	// Try substitution first (bases are given, no lookup needed)
+	if m := reGenomicSubstitution.FindStringSubmatch(genomicChange); m != nil {
+		pos, _ := strconv.ParseInt(m[1], 10, 64)
+		return []*vcf.Variant{{
+			Chrom: chrom,
+			Pos:   pos,
+			Ref:   m[2],
+			Alt:   m[3],
+		}}, nil
+	}
+
+	// Try deletion
+	if m := reGenomicDeletion.FindStringSubmatch(genomicChange); m != nil {
+		return resolveHGVSgDeletion(c, chrom, m)
+	}
+
+	return nil, fmt.Errorf("unsupported genomic change notation %q (supported: substitutions like 1293968C>T, deletions like 1293968del or 1293968_1293970del)", genomicChange)
+}
+
+// resolveHGVSgDeletion resolves a genomic deletion by looking up reference bases
+// from a transcript's CDS sequence.
+func resolveHGVSgDeletion(c *cache.Cache, chrom string, m []string) ([]*vcf.Variant, error) {
+	genomicStart, _ := strconv.ParseInt(m[1], 10, 64)
+	genomicEnd := genomicStart
+	if m[2] != "" {
+		genomicEnd, _ = strconv.ParseInt(m[2], 10, 64)
+	}
+	if genomicEnd < genomicStart {
+		return nil, fmt.Errorf("invalid genomic deletion range: %d_%d", genomicStart, genomicEnd)
+	}
+
+	// Find a transcript covering the deletion and padding position
+	padPos := genomicStart - 1
+	transcripts := c.FindTranscripts(chrom, genomicStart)
+	if len(transcripts) == 0 {
+		return nil, fmt.Errorf("no transcript found covering %s:%d", chrom, genomicStart)
+	}
+
+	// Try each transcript until we find one that can resolve all bases
+	for _, t := range transcripts {
+		if len(t.CDSSequence) == 0 {
+			continue
+		}
+
+		// Check that padding position and all deleted positions map to CDS
+		padCDS := GenomicToCDS(padPos, t)
+		if padCDS == 0 {
+			continue
+		}
+
+		allMapped := true
+		for pos := genomicStart; pos <= genomicEnd; pos++ {
+			if GenomicToCDS(pos, t) == 0 {
+				allMapped = false
+				break
+			}
+		}
+		if !allMapped {
+			continue
+		}
+
+		// Get padding base (always on genomic/forward strand)
+		var padBase string
+		if t.IsReverseStrand() {
+			padBase = string(Complement(t.CDSSequence[padCDS-1]))
+		} else {
+			padBase = string(t.CDSSequence[padCDS-1])
+		}
+
+		// Get deleted bases on genomic strand
+		var deletedBases []byte
+		for pos := genomicStart; pos <= genomicEnd; pos++ {
+			cdsPos := GenomicToCDS(pos, t)
+			base := t.CDSSequence[cdsPos-1]
+			if t.IsReverseStrand() {
+				base = Complement(base)
+			}
+			deletedBases = append(deletedBases, base)
+		}
+
+		return []*vcf.Variant{{
+			Chrom: chrom,
+			Pos:   padPos,
+			Ref:   padBase + string(deletedBases),
+			Alt:   padBase,
+		}}, nil
+	}
+
+	return nil, fmt.Errorf("no transcript with CDS sequence covers positions %s:%d-%d (including padding base)", chrom, padPos, genomicEnd)
+}
+
 // findTranscriptByPrefix finds transcripts matching an ID prefix (without version).
 func findTranscriptByPrefix(c *cache.Cache, prefix string) []*cache.Transcript {
 	// Strip version suffix from prefix if present for matching

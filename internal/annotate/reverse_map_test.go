@@ -277,6 +277,114 @@ func TestReverseMapHGVSc_ForwardStrandDel(t *testing.T) {
 	assert.Equal(t, "A", v.Alt)
 }
 
+func TestResolveHGVSg_Substitution(t *testing.T) {
+	c := createKRASCache()
+
+	// 12:g.25245350C>T — simple substitution, bases given directly
+	variants, err := ResolveHGVSg(c, "12", "25245350C>T")
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+
+	v := variants[0]
+	assert.Equal(t, "12", v.Chrom)
+	assert.Equal(t, int64(25245350), v.Pos)
+	assert.Equal(t, "C", v.Ref)
+	assert.Equal(t, "T", v.Alt)
+}
+
+func TestResolveHGVSg_SingleBaseDel_ReverseStrand(t *testing.T) {
+	c := createKRASCache()
+
+	// Delete genomic position 25245351 (KRAS CDS pos 34, 'G' in CDS = 'C' on genomic)
+	// Padding at 25245350 (CDS pos 35, 'G' in CDS = 'C' on genomic)
+	// VCF: pos=25245350, ref=CC, alt=C
+	variants, err := ResolveHGVSg(c, "12", "25245351del")
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+
+	v := variants[0]
+	assert.Equal(t, "12", v.Chrom)
+	assert.Equal(t, int64(25245350), v.Pos)
+	assert.Equal(t, "CC", v.Ref)
+	assert.Equal(t, "C", v.Alt)
+}
+
+func TestResolveHGVSg_RangeDel_ReverseStrand(t *testing.T) {
+	c := createKRASCache()
+
+	// Delete genomic 25245349-25245351 (KRAS CDS 34-36 reversed: 'GGT' → genomic 'ACC' reversed to 'CCA'... wait)
+	// Genomic positions 25245349, 25245350, 25245351
+	// CDS pos for 25245351 = 34, CDS base 'G', genomic = complement 'C'
+	// CDS pos for 25245350 = 35, CDS base 'G', genomic = complement 'C'
+	// CDS pos for 25245349 = 36, CDS base 'T', genomic = complement 'A'
+	// Deleted genomic bases (ascending pos order): C, C, A at 25245349, 25245350, 25245351 → wait no
+	// Actually deleted bases in ascending genomic order:
+	//   25245349: CDS 36 = 'T', complement = 'A'
+	//   25245350: CDS 35 = 'G', complement = 'C'
+	//   25245351: CDS 34 = 'G', complement = 'C'
+	// Deleted on genomic strand: "ACC"
+	// Padding at 25245348: CDS 37 = 'G', complement = 'C'
+	// VCF: pos=25245348, ref=CACC, alt=C
+	variants, err := ResolveHGVSg(c, "12", "25245349_25245351del")
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+
+	v := variants[0]
+	assert.Equal(t, "12", v.Chrom)
+	assert.Equal(t, int64(25245348), v.Pos)
+	assert.Equal(t, "CACC", v.Ref)
+	assert.Equal(t, "C", v.Alt)
+}
+
+func TestResolveHGVSg_ForwardStrandDel(t *testing.T) {
+	c := cache.New()
+	c.AddTranscript(&cache.Transcript{
+		ID:       "ENST_FWD",
+		GeneName: "FWD_GENE",
+		Chrom:    "1",
+		Start:    1000,
+		End:      2000,
+		Strand:   1,
+		Biotype:  "protein_coding",
+		CDSStart: 1010,
+		CDSEnd:   1180,
+		Exons: []cache.Exon{
+			{Number: 1, Start: 1000, End: 1100, CDSStart: 1010, CDSEnd: 1100, Frame: 0},
+			{Number: 2, Start: 1150, End: 1200, CDSStart: 1150, CDSEnd: 1180, Frame: 1},
+		},
+		CDSSequence: "ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGGTGGCGTAGGCAAGAGTGCCTTGACGATACAGCTAATTCAGAATCATTTTGTGGAC",
+	})
+
+	// Delete genomic pos 1014 (CDS pos 5 = 'C')
+	// Padding at genomic 1013 (CDS pos 4 = 'A')
+	// VCF: pos=1013, ref=AC, alt=A
+	variants, err := ResolveHGVSg(c, "1", "1014del")
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+
+	v := variants[0]
+	assert.Equal(t, "1", v.Chrom)
+	assert.Equal(t, int64(1013), v.Pos)
+	assert.Equal(t, "AC", v.Ref)
+	assert.Equal(t, "A", v.Alt)
+}
+
+func TestResolveHGVSg_NoTranscript(t *testing.T) {
+	c := createKRASCache()
+
+	_, err := ResolveHGVSg(c, "99", "1000del")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no transcript")
+}
+
+func TestResolveHGVSg_UnsupportedNotation(t *testing.T) {
+	c := createKRASCache()
+
+	_, err := ResolveHGVSg(c, "12", "25245350insA")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported")
+}
+
 func TestFindTranscriptsByGene(t *testing.T) {
 	c := createKRASCache()
 

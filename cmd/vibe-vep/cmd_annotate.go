@@ -175,16 +175,18 @@ func newAnnotateVariantCmd(verbose *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "variant <spec>",
 		Short: "Annotate a single variant",
-		Long: `Annotate a single variant by genomic coordinates, protein change, or HGVSc notation.
+		Long: `Annotate a single variant by genomic coordinates, protein change, HGVSc, or HGVSg notation.
 
 Supported formats:
   Genomic:  12:25245350:C:A  or  chr12:25245350:C>A  or  12-25245350-C-A
   Protein:  KRAS G12C  or  KRAS p.G12C  or  KRAS p.Gly12Cys
-  HGVSc:    KRAS c.35G>T  or  ENST00000311936:c.35G>T`,
+  HGVSc:    KRAS c.35G>T  or  ENST00000311936:c.35G>T  or  KRAS c.34del
+  HGVSg:    5:g.1293968del  or  chr5:g.1293968C>T  or  5:g.1293968_1293970del`,
 		Example: `  vibe-vep annotate variant 12:25245350:C:A
   vibe-vep annotate variant KRAS G12C
   vibe-vep annotate variant KRAS c.35G>T
-  vibe-vep annotate variant ENST00000311936:c.35G>T`,
+  vibe-vep annotate variant ENST00000311936:c.35G>T
+  vibe-vep annotate variant 5:g.1293968del`,
 		Args: cobra.MinimumNArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return viper.BindPFlags(cmd.Flags())
@@ -205,7 +207,7 @@ Supported formats:
 	}
 
 	cmd.Flags().StringVar(&assembly, "assembly", "GRCh38", "Genome assembly: GRCh37 or GRCh38")
-	cmd.Flags().StringVar(&specType, "type", "", "Force variant type: genomic, protein, or hgvsc (auto-detected if not specified)")
+	cmd.Flags().StringVar(&specType, "type", "", "Force variant type: genomic, protein, hgvsc, or hgvsg (auto-detected if not specified)")
 	addCacheFlags(cmd)
 
 	return cmd
@@ -362,8 +364,10 @@ func runAnnotateVariant(logger *zap.Logger, specInput, assembly, specType string
 			spec.Type = annotate.SpecProtein
 		case "hgvsc":
 			spec.Type = annotate.SpecHGVSc
+		case "hgvsg":
+			spec.Type = annotate.SpecHGVSg
 		default:
-			return fmt.Errorf("unknown variant type %q (use genomic, protein, or hgvsc)", specType)
+			return fmt.Errorf("unknown variant type %q (use genomic, protein, hgvsc, or hgvsg)", specType)
 		}
 	}
 
@@ -409,6 +413,18 @@ func runAnnotateVariant(logger *zap.Logger, specInput, assembly, specType string
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Query: %s c.%s\n\n", spec.TranscriptID, spec.CDSChange)
+		fmt.Fprintf(os.Stderr, "Found %d genomic variant(s):\n", len(variants))
+		for _, v := range variants {
+			fmt.Fprintf(os.Stderr, "  %s:%d %s>%s\n", v.Chrom, v.Pos, v.Ref, v.Alt)
+		}
+		fmt.Fprintln(os.Stderr)
+
+	case annotate.SpecHGVSg:
+		variants, err = annotate.ResolveHGVSg(cr.cache, spec.Chrom, spec.GenomicChange)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Query: %s:g.%s\n\n", spec.Chrom, spec.GenomicChange)
 		fmt.Fprintf(os.Stderr, "Found %d genomic variant(s):\n", len(variants))
 		for _, v := range variants {
 			fmt.Fprintf(os.Stderr, "  %s:%d %s>%s\n", v.Chrom, v.Pos, v.Ref, v.Alt)

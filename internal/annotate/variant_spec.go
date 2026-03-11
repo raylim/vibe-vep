@@ -14,6 +14,7 @@ const (
 	SpecGenomic VariantSpecType = iota
 	SpecProtein
 	SpecHGVSc
+	SpecHGVSg
 )
 
 // VariantSpec holds a parsed variant specification.
@@ -32,6 +33,8 @@ type VariantSpec struct {
 	// HGVSc fields
 	TranscriptID string // transcript ID or gene name
 	CDSChange    string // e.g. "35G>T"
+	// HGVSg fields (Chrom reused from genomic)
+	GenomicChange string // e.g. "1293968del" or "1293968C>T"
 }
 
 // AminoAcidThreeToSingle maps three-letter amino acid codes to single-letter.
@@ -48,6 +51,8 @@ func init() {
 var (
 	// Genomic: chr12:25245350:C:A  or  12-25245350-C-A  or  chr12:25245350:C>A
 	reGenomic = regexp.MustCompile(`^(chr)?(\w+)[:\-](\d+)[:\-]([ACGTNacgtn]+)[>:\-/]([ACGTNacgtn]+)$`)
+	// HGVSg: 5:g.1293968del  or  chr5:g.1293968C>T
+	reHGVSg = regexp.MustCompile(`^(?:chr)?(\w+):g\.(.+)$`)
 	// HGVSc: KRAS c.35G>T  or  ENST00000311936:c.35G>T
 	reHGVSc = regexp.MustCompile(`^(\S+)\s+c\.(.+)$`)
 	// HGVSc with colon separator: ENST00000311936:c.35G>T
@@ -64,6 +69,11 @@ func ParseVariantSpec(input string) (*VariantSpec, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, fmt.Errorf("empty variant specification")
+	}
+
+	// Try HGVSg (must be before genomic, since both start with chr/number)
+	if spec, ok := parseHGVSg(input); ok {
+		return spec, nil
 	}
 
 	// Try genomic format
@@ -90,6 +100,21 @@ func ParseVariantSpec(input string) (*VariantSpec, error) {
 	}
 
 	return nil, fmt.Errorf("cannot parse variant specification %q (expected genomic, protein, or HGVSc format)", input)
+}
+
+func parseHGVSg(input string) (*VariantSpec, bool) {
+	m := reHGVSg.FindStringSubmatch(input)
+	if m == nil {
+		return nil, false
+	}
+	if !strings.ContainsAny(m[2], "0123456789") {
+		return nil, false
+	}
+	return &VariantSpec{
+		Type:          SpecHGVSg,
+		Chrom:         m[1],
+		GenomicChange: m[2],
+	}, true
 }
 
 func parseGenomic(input string) (*VariantSpec, bool) {
